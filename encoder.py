@@ -4,12 +4,12 @@ import torch.nn as nn
 from transformer import PatchEmbedding, MLP, SelfAttnBlock
 
 class TransformerEncoder(nn.Module):
-    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, is_cls_token = True):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 12, is_cls_token = True):
         super(TransformerEncoder, self).__init__()
 
         self.features = self.embed_dim = embed_dim
         self.is_cls_token = is_cls_token
-        self.depth = 12
+        self.depth = depth
         self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
         self.blocks = nn.Sequential(*[
             SelfAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
@@ -28,87 +28,56 @@ class TransformerEncoder(nn.Module):
         
         return x.mean(dim = 1)
     
-class ResNetEncoder(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(ResNetEncoder, self).__init__()
+class BasicBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, 3, stride=stride, padding=1, bias=False)
+        self.bn1   = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1, bias=False)
+        self.bn2   = nn.BatchNorm2d(out_channels)
+        self.relu  = nn.ReLU(inplace=True)
 
-        self.pooling = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
-        self.avg_pooling = nn.AdaptiveAvgPool2d((1, 1))
-
-        self.residual_block1 = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size = 7, stride = 2, padding = 1),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
-
-        self.residual_block2 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size = 3, stride = 1, padding = 1),
-            nn.BatchNorm2d(64),
-            nn.ReLU()
-        )
-
-        self.residual_block3 = nn.Sequential(
-            nn.Conv2d(64, 128, kernel_size = 3, stride = 2, padding = 1),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
-        )
-
-        self.residual_block4 = nn.Sequential(
-            nn.Conv2d(128, 128, kernel_size = 3, stride = 1, padding = 1),
-            nn.BatchNorm2d(128),
-            nn.ReLU()
-        )
-
-        self.residual_block5 = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size = 3, stride = 2, padding = 1),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
-
-        self.residual_block6 = nn.Sequential(
-            nn.Conv2d(256, 256, kernel_size = 3, stride = 1, padding = 1),
-            nn.BatchNorm2d(256),
-            nn.ReLU()
-        )
-
-        self.residual_block7 = nn.Sequential(
-            nn.Conv2d(256, 512, kernel_size = 3, stride = 2, padding = 1),
-            nn.BatchNorm2d(512),
-            nn.ReLU()
-        )
-
-        self.residual_block8 = nn.Sequential(
-            nn.Conv2d(512, 512, kernel_size = 3, stride = 1, padding = 1),
-            nn.BatchNorm2d(512),
-            nn.ReLU()
-        )
-
-        self.mlp = MLP(in_features = 512, hidden_features = 512 * 4, drop = 0.1, out_features = out_channels)
-
+        if stride != 1 or in_channels != out_channels:      # project identity when shape changes
+            self.downsample = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels))
+            
     def forward(self, x):
-        B = x.shape[0]
+        identity = x
+        out = self.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+        if self.downsample is not None:
+            identity = self.downsample(x)
+        return self.relu(out + identity)
 
-        x = self.residual_block1(x) # 7x7 conv, 64, /2
-        x = self.pooling(x) # pool, /2
+class ResNetEncoder(nn.Module):
+    def __init__(self, in_channels, out_channels, layers=(3, 4, 6, 3)):
+        super().__init__()
+        self.stem = nn.Sequential(
+            nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, stride=2, padding=1))
+        
+        self.layer1 = self._make_layer(64, 64, layers[0], stride=1)
+        self.layer2 = self._make_layer(64, 128, layers[1], stride=2)
+        self.layer3 = self._make_layer(128, 256, layers[2], stride=2)
+        self.layer4 = self._make_layer(256, 512, layers[3], stride=2)
 
-        for _ in range(6):
-            x = self.residual_block2(x) # 3x3 conv, 64
+        self.avg_pooling = nn.AdaptiveAvgPool2d((1, 1))
+        self.mlp = MLP(in_features=512, hidden_features=512 * 4, drop=0.1, out_features=out_channels)
 
-        x = self.residual_block3(x) # 3x3 conv, 128, /2
-
-        for _ in range(7):
-            x = self.residual_block4(x) # 3x3 conv, 128
-
-        x = self.residual_block5(x) # 3x3 conv, 256, /2
-
-        for _ in range(11):
-            x = self.residual_block6(x) # 3x3 conv, 256
-
-        x = self.residual_block7(x) # 3x3 conv, 512, /2
-
-        for _ in range(5):
-            x = self.residual_block8(x) # 3x3 conv, 512
-
-        x = self.avg_pooling(x).flatten(B, -1)
-
+    def _make_layer(self, in_c, out_c, blocks, stride):
+        layers = [BasicBlock(in_c, out_c, stride)]
+        for _ in range(blocks - 1):
+            layers.append(BasicBlock(out_c, out_c, stride=1))   # each block is a distinct module
+        return nn.Sequential(*layers)
+    
+    def forward(self, x):
+        x = self.stem(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.layer4(x)
+        x = self.avg_pooling(x).flatten(1)                  # fixed: flatten from dim 1
         return self.mlp(x)

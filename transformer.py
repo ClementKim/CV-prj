@@ -65,7 +65,7 @@ class MultiHeadSelfAttention(nn.Module):
         return out
 
 class MultiHeadCrossAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads, drop, img_size, patch_size):
+    def __init__(self, embed_dim, num_heads, drop):
         super(MultiHeadCrossAttention, self).__init__()
 
         self.num_heads = num_heads
@@ -128,12 +128,12 @@ class SelfAttnBlock(nn.Module):
         return x
     
 class CrossAttnBlock(nn.Module):
-    def __init__(self, dim, num_heads, mlp_ratio, drop, attn_drop, img_size, patch_size):
+    def __init__(self, dim, num_heads, mlp_ratio, drop, attn_drop):
         super().__init__()
 
         self.norm1 = nn.LayerNorm(dim)
         self.norm2 = nn.LayerNorm(dim)
-        self.attn = MultiHeadCrossAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop, img_size = img_size, patch_size = patch_size)
+        self.attn = MultiHeadCrossAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop)
         self.mlp = MLP(in_features = dim, hidden_features = int(dim * mlp_ratio), drop = drop)
 
     def forward(self, x, auxiliary_tokens):
@@ -143,12 +143,12 @@ class CrossAttnBlock(nn.Module):
         return x
     
 class SelfExpert(nn.Module):
-    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, is_cls_token = True):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 12, is_cls_token = True):
         super(SelfExpert, self).__init__()
 
         self.features = self.embed_dim = embed_dim
         self.is_cls_token = is_cls_token
-        self.depth = 12
+        self.depth = depth
         self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
         self.blocks = nn.Sequential(*[
             SelfAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
@@ -167,15 +167,15 @@ class SelfExpert(nn.Module):
         return x.mean(dim = 1)
 
 class CrossExpert(nn.Module):
-    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, is_cls_token = True):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 12, is_cls_token = True):
         super(CrossExpert, self).__init__()
 
         self.features = self.embed_dim = embed_dim
         self.is_cls_token = is_cls_token
-        self.depth = 12
+        self.depth = depth
         self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
         self.blocks = nn.ModuleList([
-            CrossAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop, img_size = img_size, patch_size = patch_size)
+            CrossAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
             for _ in range(self.depth)])
         
         self.norm = nn.LayerNorm(embed_dim)
