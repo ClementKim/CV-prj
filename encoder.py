@@ -8,6 +8,7 @@ class TransformerEncoder(nn.Module):
         super(TransformerEncoder, self).__init__()
 
         self.features = self.embed_dim = embed_dim
+        self.patch_size = patch_size
         self.is_cls_token = is_cls_token
         self.depth = depth
         self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
@@ -19,14 +20,23 @@ class TransformerEncoder(nn.Module):
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
+        B, C, H, W = x.shape
+
         x = self.patch_embed(x)
         x = self.blocks(x)
         x = self.norm(x)
 
+        h, w = H // self.patch_size, W // self.patch_size
+
         if self.is_cls_token:
-            return x[:, 0]
-        
-        return x.mean(dim = 1)
+            cls_vector = x[:, 0]        # global summary token -> feeds the bilinear outer product
+            patches = x[:, 1:]
+        else:
+            cls_vector = x.mean(dim = 1)
+            patches = x
+
+        spatial = patches.transpose(1, 2).reshape(B, self.embed_dim, h, w)   # spatial token grid [B, D, h, w] -> decoder
+        return cls_vector, spatial
     
 class BasicBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1):
@@ -80,5 +90,5 @@ class ResNetEncoder(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        x = self.avg_pooling(x).flatten(1)                  # fixed: flatten from dim 1
+        x = self.avg_pooling(x).flatten(1)                  # global vector -> feeds the bilinear outer product
         return self.mlp(x)

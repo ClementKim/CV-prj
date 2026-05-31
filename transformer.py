@@ -188,5 +188,79 @@ class CrossExpert(nn.Module):
 
         if self.is_cls_token:
             return x[:, 0]
-        
+
         return x.mean(dim = 1)
+
+class DecoderCrossAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, drop):
+        super(DecoderCrossAttention, self).__init__()
+
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q = nn.Linear(embed_dim, embed_dim)
+        self.k = nn.Linear(embed_dim, embed_dim)
+        self.v = nn.Linear(embed_dim, embed_dim)
+        self.o = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(drop)
+
+    def forward(self, x, memory):               # x: [B, N, D] queries, memory: [B, M, D] (per-sample, unlike the shared aux above)
+        B, N, D = x.shape
+        M = memory.shape[1]
+
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k(memory).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v(memory).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
+
+        A = F.softmax(q @ k.transpose(2, 3) * self.scale, dim = -1)
+
+        out = (A @ v).transpose(1, 2).reshape(B, N, D)
+
+        return self.dropout(self.o(out))
+
+class DecoderBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio, drop, attn_drop):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(dim)
+        self.self_attn = MultiHeadSelfAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop)
+        self.norm2 = nn.LayerNorm(dim)
+        self.cross_attn = DecoderCrossAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop)
+        self.norm3 = nn.LayerNorm(dim)
+        self.mlp = MLP(in_features = dim, hidden_features = int(dim * mlp_ratio), drop = drop)
+
+    def forward(self, x, memory):
+        x = x + self.self_attn(self.norm1(x))
+        x = x + self.cross_attn(self.norm2(x), memory)
+        x = x + self.mlp(self.norm3(x))
+
+        return x
+
+class TransformerDecoder(nn.Module):
+    """Per-pixel segmentation head: ViT spatial tokens (queries) cross-attend to the global
+    material descriptor (memory), then a per-token linear predicts the class; upsample to input size."""
+    def __init__(self, embed_dim, num_classes, num_heads, mlp_ratio, drop, attn_drop, depth = 2, num_memory = 16):
+        super(TransformerDecoder, self).__init__()
+
+        self.num_memory = num_memory
+        self.to_memory = nn.Linear(embed_dim, num_memory * embed_dim)   # global descriptor -> memory tokens
+        self.blocks = nn.ModuleList([
+            DecoderBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
+            for _ in range(depth)])
+        self.norm = nn.LayerNorm(embed_dim)
+        self.classifier = nn.Linear(embed_dim, num_classes)
+
+    def forward(self, descriptor, spatial, out_size):
+        B, D, h, w = spatial.shape
+
+        tokens = spatial.flatten(2).transpose(1, 2)                          # [B, N, D] queries
+        memory = self.to_memory(descriptor).reshape(B, self.num_memory, D)   # [B, M, D] memory
+
+        for block in self.blocks:
+            tokens = block(tokens, memory)
+
+        logits = self.classifier(self.norm(tokens))                          # [B, N, num_classes]
+        logits = logits.transpose(1, 2).reshape(B, -1, h, w)                 # [B, num_classes, h, w]
+
+        return F.interpolate(logits, size = out_size, mode = 'bilinear', align_corners = False)

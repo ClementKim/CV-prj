@@ -3,3 +3,5 @@ data
 log
 __pycache__
 minc
+photo_orig
+*.tar.gz
