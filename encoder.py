@@ -11,7 +11,7 @@ class TransformerEncoder(nn.Module):
         self.is_cls_token = is_cls_token
         self.depth = 12
         self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
-        self.blocks = nn.ModuleList(*[
+        self.blocks = nn.Sequential(*[
             SelfAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
             for _ in range(self.depth)
         ])
@@ -32,7 +32,7 @@ class ResNetEncoder(nn.Module):
     def __init__(self, in_channels, out_channels):
         super(ResNetEncoder, self).__init__()
 
-        self.pooling = nn.MaxPool2d(stride = 2)
+        self.pooling = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
         self.avg_pooling = nn.AdaptiveAvgPool2d((1, 1))
 
         self.residual_block1 = nn.Sequential(
@@ -83,9 +83,11 @@ class ResNetEncoder(nn.Module):
             nn.ReLU()
         )
 
-        self.mlp = MLP(in_features = 512, hidden_features = 512 * 4, out_features = out_channels)
+        self.mlp = MLP(in_features = 512, hidden_features = 512 * 4, drop = 0.1, out_features = out_channels)
 
     def forward(self, x):
+        B = x.shape[0]
+
         x = self.residual_block1(x) # 7x7 conv, 64, /2
         x = self.pooling(x) # pool, /2
 
@@ -107,6 +109,6 @@ class ResNetEncoder(nn.Module):
         for _ in range(5):
             x = self.residual_block8(x) # 3x3 conv, 512
 
-        x = self.avg_pooling(x).squeeze()
+        x = self.avg_pooling(x).flatten(B, -1)
 
         return self.mlp(x)
