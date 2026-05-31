@@ -36,6 +36,7 @@ class BasicBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channels, out_channels, 3, stride=1, padding=1, bias=False)
         self.bn2   = nn.BatchNorm2d(out_channels)
         self.relu  = nn.ReLU(inplace=True)
+        self.downsample = None
 
         if stride != 1 or in_channels != out_channels:      # project identity when shape changes
             self.downsample = nn.Sequential(

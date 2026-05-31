@@ -81,7 +81,7 @@ def main():
 
     num_classes = 10 # for CIFAR-10
 
-    batch = 128
+    batch = 4
     lr = 5e-5
     weight_decay = 0.01
 
