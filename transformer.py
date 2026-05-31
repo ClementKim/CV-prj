@@ -1,0 +1,192 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, in_channels, embed_dim, img_size, patch_size, is_cls_token = True):
+        super().__init__()
+
+        self.embed_dim = embed_dim
+        self.is_cls_token = is_cls_token
+
+        self.patchify = nn.Conv2d(in_channels = in_channels, out_channels = embed_dim, kernel_size = patch_size, stride = patch_size)
+        self.linear = nn.Linear(in_features = embed_dim, out_features = embed_dim)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, embed_dim))
+        
+        if is_cls_token:
+            self.positional_embedding = nn.Parameter(torch.randn(1, (img_size // patch_size) ** 2 + 1, embed_dim))
+
+        else:
+            self.positional_embedding = nn.Parameter(torch.randn(1, (img_size // patch_size) ** 2, embed_dim))
+
+    def forward(self, x):
+        B, C, H, W = x.shape
+
+        x = self.patchify(x)
+        x = torch.flatten(x, 2)
+        x = torch.transpose(x, 1, 2)
+        x = self.linear(x)
+
+        if self.is_cls_token:
+            cls = self.cls_token.expand(B, 1, self.embed_dim)
+            x = torch.cat((cls, x), dim = 1)
+
+        x = x + self.positional_embedding
+
+        return x
+    
+class MultiHeadSelfAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, drop):
+        super(MultiHeadSelfAttention, self).__init__()
+
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q = nn.Linear(embed_dim, embed_dim)
+        self.k = nn.Linear(embed_dim, embed_dim)
+        self.v = nn.Linear(embed_dim, embed_dim)
+        self.o = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(drop)
+
+    def forward(self, x):
+        B, N, D = x.shape
+        
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+
+        A = F.softmax(q @ k.transpose(2, 3) * self.scale, dim = -1)
+        
+        SA = (A @ v).transpose(1, 2).reshape(B, N, D)
+
+        out = self.dropout(self.o(SA))
+
+        return out
+
+class MultiHeadCrossAttention(nn.Module):
+    def __init__(self, embed_dim, num_heads, drop, img_size, patch_size):
+        super(MultiHeadCrossAttention, self).__init__()
+
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.scale = self.head_dim ** -0.5
+
+        self.q = nn.Linear(embed_dim, embed_dim)
+        self.k = nn.Linear(embed_dim, embed_dim)
+        self.v = nn.Linear(embed_dim, embed_dim)
+        self.o = nn.Linear(embed_dim, embed_dim)
+        self.dropout = nn.Dropout(drop)
+
+    def forward(self, x, auxiliary_tokens):
+        B, N, D = x.shape
+
+        q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k(auxiliary_tokens).reshape(1, -1, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v(auxiliary_tokens).reshape(1, -1, self.num_heads, self.head_dim).transpose(1, 2)
+
+        A = F.softmax(q @ k.transpose(2, 3) * self.scale, dim = -1)
+
+        CA = (A @ v).transpose(1, 2).reshape(B, -1, D)
+
+        out = self.dropout(self.o(CA))
+
+        return out
+
+class MLP(nn.Module):
+    def __init__(self, in_features, hidden_features, drop):
+        super().__init__()
+
+        out_features = in_features
+
+        self.linear1 = nn.Linear(in_features = in_features, out_features = hidden_features)
+        self.gelu = nn.GELU()
+        self.dropout = nn.Dropout(drop)
+        self.linear2 = nn.Linear(in_features = hidden_features, out_features = out_features)
+
+    def forward(self, x):
+        x = self.linear1(x)
+        x = self.gelu(x)
+        x = self.dropout(x)
+        x = self.linear2(x)
+
+        return self.dropout(x)
+    
+class SelfAttnBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio, drop, attn_drop):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.attn = MultiHeadSelfAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop)
+        self.mlp = MLP(in_features = dim, hidden_features = int(dim * mlp_ratio), drop = drop)
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        
+        return x
+    
+class CrossAttnBlock(nn.Module):
+    def __init__(self, dim, num_heads, mlp_ratio, drop, attn_drop, img_size, patch_size):
+        super().__init__()
+
+        self.norm1 = nn.LayerNorm(dim)
+        self.norm2 = nn.LayerNorm(dim)
+        self.attn = MultiHeadCrossAttention(embed_dim = dim, num_heads = num_heads, drop = attn_drop, img_size = img_size, patch_size = patch_size)
+        self.mlp = MLP(in_features = dim, hidden_features = int(dim * mlp_ratio), drop = drop)
+
+    def forward(self, x, auxiliary_tokens):
+        x = x + self.attn(self.norm1(x), auxiliary_tokens)
+        x = x + self.mlp(self.norm2(x))
+
+        return x
+    
+class SelfExpert(nn.Module):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, is_cls_token = True):
+        super(SelfExpert, self).__init__()
+
+        self.features = self.embed_dim = embed_dim
+        self.is_cls_token = is_cls_token
+        self.depth = 12
+        self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
+        self.blocks = nn.Sequential(*[
+            SelfAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
+            for _ in range(self.depth)])
+        
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x):
+        x = self.patch_embed(x)
+        x = self.blocks(x)
+        x = self.norm(x)
+
+        if self.is_cls_token:
+            return x[:, 0]
+        
+        return x.mean(dim = 1)
+
+class CrossExpert(nn.Module):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, is_cls_token = True):
+        super(CrossExpert, self).__init__()
+
+        self.features = self.embed_dim = embed_dim
+        self.is_cls_token = is_cls_token
+        self.depth = 12
+        self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
+        self.blocks = nn.ModuleList([
+            CrossAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop, img_size = img_size, patch_size = patch_size)
+            for _ in range(self.depth)])
+        
+        self.norm = nn.LayerNorm(embed_dim)
+
+    def forward(self, x, auxiliary_tokens):
+        x = self.patch_embed(x)
+        for block in self.blocks:
+            x = block(x, auxiliary_tokens)
+        x = self.norm(x)
+
+        if self.is_cls_token:
+            return x[:, 0]
+        
+        return x.mean(dim = 1)
