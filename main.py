@@ -1,4 +1,8 @@
 import torch
+import random
+import argparse
+
+import numpy as np
 import torch.nn as nn
 
 from tqdm import tqdm
@@ -96,21 +100,34 @@ def evaluate(model, loader, num_classes, device):
     print(f'Pixel Accuracy: {pixel_acc:.4f}, mIoU: {miou:.4f}')
     return pixel_acc, miou
 
-def main():
+def main(args):
     img_size = IMG_SIZE        # 512, fixed square input required by the positional embedding
-    patch_size = 16
+    patch_size = args.patch_size
     in_channels = 3
-    embed_dim = 512
-    num_heads = 8
-    mlp_ratio = 4.0
-    drop = 0.1
-    attn_drop = 0.1
+    embed_dim = args.embed_dim
+    num_heads = args.num_heads
+    mlp_ratio = args.mlp_ratio
+    drop = args.drop
+    attn_drop = args.attn_drop
 
     num_classes = NUM_CLASSES  # 23 MINC material categories
 
-    batch = 2                  # 512x512 with 4 ViT experts is heavy; raise if memory allows
-    lr = 5e-5
-    weight_decay = 0.01
+    batch = args.batch                  # 512x512 with 4 ViT experts is heavy; raise if memory allows
+    lr = args.lr
+    weight_decay = args.weight_decay
+
+    seed = args.seed
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = True
+
+    # Allow TF32 on Ampere+ GPUs for faster matmuls
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     print(f'Using device: {device}')
@@ -140,12 +157,12 @@ def main():
     optimizer = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
     loss_fn = nn.CrossEntropyLoss(ignore_index = IGNORE_INDEX)
 
-    for epoch in range(5):
+    for epoch in range(args.epochs):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
             loss = train_step(model, batch_data, loss_fn, optimizer, device)
             running_loss += loss; num_batches += 1
-        print(f'Epoch: {epoch}, Average Loss: {running_loss / num_batches:.4f}')
+        print(f'Epoch: {epoch+1}, Average Loss: {running_loss / num_batches:.4f}')
 
         with torch.no_grad():
             evaluate(model, val_loader, num_classes, device)
@@ -154,4 +171,22 @@ def main():
     evaluate(model, test_loader, num_classes, device)
 
 if __name__ == '__main__':
-    main()
+    arg = argparse.ArgumentParser()
+    
+    arg.add_argument('--seed', type = int, default = 42)
+    
+    arg.add_argument('--batch', type = int, default = 4)
+    arg.add_argument('--epochs', type = int, default = 20)
+
+    arg.add_argument('--patch_size', type = int, default = 16)
+    arg.add_argument('--embed_dim', type = int, default = 512)
+    arg.add_argument('--num_heads', type = int, default = 8)
+    arg.add_argument('--mlp_ratio', type = float, default = 2.0)
+    arg.add_argument('--drop', type = float, default = 0.1)
+    arg.add_argument('--attn_drop', type = float, default = 0.1)
+    
+    arg.add_argument('--lr', type = float, default = 5e-5)
+    arg.add_argument('--weight_decay', type = float, default = 0.01)
+
+    args = arg.parse_args()
+    main(args)
