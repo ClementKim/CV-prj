@@ -143,52 +143,58 @@ class CrossAttnBlock(nn.Module):
         return x
     
 class SelfExpert(nn.Module):
-    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 12, is_cls_token = True):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 2, is_cls_token = True):
         super(SelfExpert, self).__init__()
 
         self.features = self.embed_dim = embed_dim
-        self.is_cls_token = is_cls_token
         self.depth = depth
-        self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
+
+        # Replace PatchEmbedding with a linear projection layer
+        self.input_proj = nn.Linear(embed_dim, embed_dim)
+
         self.blocks = nn.Sequential(*[
             SelfAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
             for _ in range(self.depth)])
-        
+
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x):
-        x = self.patch_embed(x)
+        # x input shape: [B, 1, embed_dim, embed_dim]
+        x = x.squeeze(1)            # Transform to [B, embed_dim, embed_dim]
+        x = self.input_proj(x)
+
         x = self.blocks(x)
         x = self.norm(x)
 
-        if self.is_cls_token:
-            return x[:, 0]
-        
+        # Replace lossy x[:, 0] with global mean pooling
         return x.mean(dim = 1)
 
 class CrossExpert(nn.Module):
-    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 12, is_cls_token = True):
+    def __init__(self, img_size, patch_size, in_channels, embed_dim, num_heads, mlp_ratio, drop, attn_drop, depth = 2, is_cls_token = True):
         super(CrossExpert, self).__init__()
 
         self.features = self.embed_dim = embed_dim
-        self.is_cls_token = is_cls_token
         self.depth = depth
-        self.patch_embed = PatchEmbedding(in_channels = in_channels, embed_dim = embed_dim, img_size = img_size, patch_size = patch_size, is_cls_token = is_cls_token)
+
+        # Replace PatchEmbedding with a linear projection layer
+        self.input_proj = nn.Linear(embed_dim, embed_dim)
+
         self.blocks = nn.ModuleList([
             CrossAttnBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
             for _ in range(self.depth)])
-        
+
         self.norm = nn.LayerNorm(embed_dim)
 
     def forward(self, x, auxiliary_tokens):
-        x = self.patch_embed(x)
+        # x input shape: [B, 1, embed_dim, embed_dim]
+        x = x.squeeze(1)            # Transform to [B, embed_dim, embed_dim]
+        x = self.input_proj(x)
+
         for block in self.blocks:
             x = block(x, auxiliary_tokens)
         x = self.norm(x)
 
-        if self.is_cls_token:
-            return x[:, 0]
-
+        # Replace lossy x[:, 0] with global mean pooling
         return x.mean(dim = 1)
 
 class DecoderCrossAttention(nn.Module):

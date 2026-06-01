@@ -118,6 +118,18 @@ class MINCSegmentationDataset(Dataset):
 
         return image_t, label_t
 
+    def label_only(self, idx):
+        """Return just the fused, resized [H, W] label map for an index (no photo decode).
+
+        Used to tally per-class pixel frequencies over the train split for loss
+        weighting without paying the cost of loading/normalizing every image.
+        """
+        photo_id, shapes = self.samples[idx]
+        label_map = self._fuse_label_map(photo_id, shapes)
+        label_image = Image.fromarray(label_map).resize(
+            (self.img_size, self.img_size), Image.NEAREST)
+        return torch.from_numpy(np.asarray(label_image, dtype = np.int64))
+
 
 def seg_collate_fn(batch):
     images = torch.stack([item[0] for item in batch], dim = 0)

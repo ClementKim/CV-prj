@@ -1,3 +1,4 @@
+import os
 import torch
 import random
 import argparse
@@ -100,6 +101,38 @@ def evaluate(model, loader, num_classes, device):
     print(f'Pixel Accuracy: {pixel_acc:.4f}, mIoU: {miou:.4f}')
     return pixel_acc, miou
 
+def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight, device, cache_path = None):
+    """Inverse-frequency class weights over the TRAIN split only (no val/test leakage).
+
+    The MINC-S labels are ~54x imbalanced at the pixel level, so plain CE collapses to
+    the dominant materials (mIoU stuck near 1/num_classes). `weight_pow` softens the raw
+    1 / freq (0.5 = inverse-sqrt, a stable default under heavy imbalance; 0 disables it).
+    Weights are normalized so present classes average to 1 (keeps the loss scale close to
+    plain CE) and clamped to `max_weight` so ultra-rare classes can't dominate the gradient.
+    """
+    if cache_path and os.path.exists(cache_path):
+        return torch.load(cache_path).to(device)
+
+    counts = torch.zeros(num_classes, dtype = torch.double)
+    for i in tqdm(indices, desc = 'Class weights'):
+        label = dataset.label_only(i)
+        valid = label != IGNORE_INDEX
+        counts += torch.bincount(label[valid].view(-1), minlength = num_classes).double()
+
+    present = counts > 0
+    freq = counts / counts.sum().clamp(min = 1)
+    weights = torch.ones(num_classes, dtype = torch.double)
+    weights[present] = (1.0 / freq[present]) ** weight_pow
+    weights[present] *= present.sum() / weights[present].sum()       # present-class mean -> 1
+    weights = weights.clamp(max = max_weight)
+    weights[~present] = 0.0                                          # classes absent from train get no weight
+
+    weights = weights.float()
+    if cache_path:
+        os.makedirs(os.path.dirname(cache_path), exist_ok = True)
+        torch.save(weights, cache_path)
+    return weights.to(device)
+
 def main(args):
     img_size = IMG_SIZE        # 512, fixed square input required by the positional embedding
     patch_size = args.patch_size
@@ -154,15 +187,34 @@ def main(args):
 
     model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool, auxiliary_tokens, decoder).to(device)
 
+    if args.weight_pow > 0:
+        cache_path = os.path.join('cache', f'clsw_n{n}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
+        print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
+    else:
+        class_weights = None
+
     optimizer = torch.optim.AdamW(model.parameters(), lr = lr, weight_decay = weight_decay)
-    loss_fn = nn.CrossEntropyLoss(ignore_index = IGNORE_INDEX)
+    loss_fn = nn.CrossEntropyLoss(weight = class_weights, ignore_index = IGNORE_INDEX)
+
+    # Per-step warmup -> cosine decay: stabilizes the early from-scratch steps, then anneals.
+    steps_per_epoch = max(1, len(train_loader))
+    total_steps = args.epochs * steps_per_epoch
+    warmup_steps = args.warmup_epochs * steps_per_epoch
+    if warmup_steps > 0:
+        warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor = 0.01, total_iters = warmup_steps)
+        cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps - warmup_steps))
+        scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, [warmup, cosine], milestones = [warmup_steps])
+    else:
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     for epoch in range(args.epochs):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
             loss = train_step(model, batch_data, loss_fn, optimizer, device)
+            scheduler.step()
             running_loss += loss; num_batches += 1
-        print(f'Epoch: {epoch+1}, Average Loss: {running_loss / num_batches:.4f}')
+        print(f'Epoch: {epoch+1}, Average Loss: {running_loss / num_batches:.4f}, LR: {scheduler.get_last_lr()[0]:.2e}')
 
         with torch.no_grad():
             evaluate(model, val_loader, num_classes, device)
@@ -176,7 +228,8 @@ if __name__ == '__main__':
     arg.add_argument('--seed', type = int, default = 42)
     
     arg.add_argument('--batch', type = int, default = 4)
-    arg.add_argument('--epochs', type = int, default = 20)
+    arg.add_argument('--epochs', type = int, default = 30)
+    arg.add_argument('--warmup_epochs', type = int, default = 1)
 
     arg.add_argument('--patch_size', type = int, default = 16)
     arg.add_argument('--embed_dim', type = int, default = 512)
@@ -187,6 +240,9 @@ if __name__ == '__main__':
     
     arg.add_argument('--lr', type = float, default = 5e-5)
     arg.add_argument('--weight_decay', type = float, default = 0.01)
+
+    arg.add_argument('--weight_pow', type = float, default = 0.5)        # class weight = (1 / freq) ** weight_pow; 0 disables
+    arg.add_argument('--max_class_weight', type = float, default = 10.0)
 
     args = arg.parse_args()
     main(args)
