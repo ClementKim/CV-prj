@@ -1,8 +1,8 @@
 .venv
 data
-log
 __pycache__
 minc
 photo_orig
 cache
 *.tar.gz
+opensurface*
