@@ -24,3 +24,9 @@ python3 main.py \
     --dataset both \
     > log/log_v3_42_both.log \
     2> log/err_v3_42_both.log
+
+git add log
+
+git commit -m "add log for run_3.sh"
+
+git push
