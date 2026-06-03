@@ -1,9 +1,26 @@
-Computer Vision
+# Computer Vision Final Project
 
-The whole experiment is performed on NVIDIA 3090 gpu.
+## 1. Environment & Requirements
 
-### To download opensurface-data
-```
+| Item               | Details                                                                                             |
+|--------------------|-----------------------------------------------------------------------------------------------------|
+| **OS / Kernel**    | Ubuntu 24.04                                                                                        |
+| **GPU**            | NVIDIA GeForce RTX 3090 (24GB VRAM)                                                                 |
+| **Python**         | 3.10.14 (`Conda`) · 3.13.5 (`venv`)                                                                 |
+| **Core Libraries** | torch · torchvision · numpy · timm · pillow                                                         |
+
+
+## 2. How to run
+
+### 2-1. To download dataset
+
+#### 1) MINC
+
+**Attach a link on here**
+
+#### 2) Opensurface (Implemented in install.sh)
+
+```sh
 mkdir opensurfaces-data
 cd opensurfaces-data
 
@@ -13,7 +30,30 @@ wget http://labelmaterial.s3.amazonaws.com/release/process_opensurfaces_release_
 unzip opensurfaces-release-0.zip
 
 python3 process_opensurfaces_release_0.py
+```
+
+### 2-1. To run
 ```sh
+source install.sh
+
+# With full training
+source run.sh true # Currently run_train.sh
+
+# With check point
+source run.sh false # Currently run_train.sh
+```
+
+## 3. Reproducibility scope
+
+For the reproducibility, we implemented reproducibility code in **main.py** and provided model checkpoint on Attach link .
+
+## 4. AI tools used
+<!-- Edit here -->
+We used Claude Code on Visual Studio Code. We used this AI tool to verify logics, to solve error, and to receive suggestions.
+
+## 5. Baseline sources
+
+**Attach tables if it is possible**
 
 <!-- 
 Execution environment (Python and key library versions, requirements, etc.)
