@@ -43,3 +43,15 @@ Epoch: 14, Average Loss: 0.7763, LR: 7.50e-06
 Pixel Accuracy: 0.7244, mIoU: 0.2168
 Epoch: 15, Average Loss: 0.7109, LR: 5.36e-06
 Pixel Accuracy: 0.7102, mIoU: 0.2175
+Epoch: 16, Average Loss: 0.6528, LR: 3.51e-06
+Pixel Accuracy: 0.7227, mIoU: 0.2196
+Epoch: 17, Average Loss: 0.6080, LR: 2.01e-06
+Pixel Accuracy: 0.7206, mIoU: 0.2172
+Epoch: 18, Average Loss: 0.5733, LR: 9.05e-07
+Pixel Accuracy: 0.7177, mIoU: 0.2167
+Epoch: 19, Average Loss: 0.5460, LR: 2.28e-07
+Pixel Accuracy: 0.7177, mIoU: 0.2164
+Epoch: 20, Average Loss: 0.5430, LR: 0.00e+00
+Pixel Accuracy: 0.7198, mIoU: 0.2171
+Test (best val checkpoint):
+Pixel Accuracy: 0.7330, mIoU: 0.2177
