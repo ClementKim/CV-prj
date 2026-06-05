@@ -1,0 +1,58 @@
+Using device: cuda
+Dataset: both | scenes: 27149 | num_classes: 68
+Class weights (present): [0.72 0.4  0.74 0.24 1.49 0.72 0.51 1.06 0.94 0.42 0.87 1.14 0.21 1.04
+ 0.82 0.61 1.1  0.59 0.77 0.38 0.61 0.55 0.22 0.3  0.58 0.11 0.24 2.65
+ 0.31 5.21 0.07 4.91 1.09 0.22 0.58 0.13 0.17 0.47 0.42 0.28 0.79 0.11
+ 0.41 0.05 0.39 0.47 0.26 1.09 0.46 1.16 4.27 0.33 8.56 0.1  0.27 2.3
+ 3.41 0.65 0.06]
+Epoch: 1, Average Loss: 2.4555, LR: 1.52e-05
+Pixel Accuracy: 0.7301, mIoU: 0.2110
+  -> new best val mIoU 0.2110 (checkpoint saved)
+Epoch: 2, Average Loss: 1.3670, LR: 3.00e-05
+Pixel Accuracy: 0.7497, mIoU: 0.2549
+  -> new best val mIoU 0.2549 (checkpoint saved)
+Epoch: 3, Average Loss: 1.1238, LR: 2.98e-05
+Pixel Accuracy: 0.7685, mIoU: 0.2777
+  -> new best val mIoU 0.2777 (checkpoint saved)
+Epoch: 4, Average Loss: 0.9579, LR: 2.91e-05
+Pixel Accuracy: 0.7774, mIoU: 0.2757
+Epoch: 5, Average Loss: 0.8262, LR: 2.80e-05
+Pixel Accuracy: 0.7582, mIoU: 0.2901
+  -> new best val mIoU 0.2901 (checkpoint saved)
+Epoch: 6, Average Loss: 0.6861, LR: 2.65e-05
+Pixel Accuracy: 0.7702, mIoU: 0.3599
+  -> new best val mIoU 0.3599 (checkpoint saved)
+Epoch: 7, Average Loss: 0.5675, LR: 2.46e-05
+Pixel Accuracy: 0.7658, mIoU: 0.3592
+Epoch: 8, Average Loss: 0.5044, LR: 2.25e-05
+Pixel Accuracy: 0.8017, mIoU: 0.3898
+  -> new best val mIoU 0.3898 (checkpoint saved)
+Epoch: 9, Average Loss: 0.4527, LR: 2.01e-05
+Pixel Accuracy: 0.7894, mIoU: 0.3823
+Epoch: 10, Average Loss: 0.4074, LR: 1.76e-05
+Pixel Accuracy: 0.8052, mIoU: 0.3705
+Epoch: 11, Average Loss: 0.3529, LR: 1.50e-05
+Pixel Accuracy: 0.7813, mIoU: 0.3841
+Epoch: 12, Average Loss: 0.3281, LR: 1.24e-05
+Pixel Accuracy: 0.8141, mIoU: 0.4256
+  -> new best val mIoU 0.4256 (checkpoint saved)
+Epoch: 13, Average Loss: 0.2804, LR: 9.87e-06
+Pixel Accuracy: 0.8163, mIoU: 0.4417
+  -> new best val mIoU 0.4417 (checkpoint saved)
+Epoch: 14, Average Loss: 0.2576, LR: 7.50e-06
+Pixel Accuracy: 0.8144, mIoU: 0.4250
+Epoch: 15, Average Loss: 0.2244, LR: 5.36e-06
+Pixel Accuracy: 0.8056, mIoU: 0.4284
+Epoch: 16, Average Loss: 0.1948, LR: 3.51e-06
+Pixel Accuracy: 0.8135, mIoU: 0.4292
+Epoch: 17, Average Loss: 0.1731, LR: 2.01e-06
+Pixel Accuracy: 0.8129, mIoU: 0.4483
+  -> new best val mIoU 0.4483 (checkpoint saved)
+Epoch: 18, Average Loss: 0.1617, LR: 9.05e-07
+Pixel Accuracy: 0.8149, mIoU: 0.4375
+Epoch: 19, Average Loss: 0.1576, LR: 2.28e-07
+Pixel Accuracy: 0.8154, mIoU: 0.4387
+Epoch: 20, Average Loss: 0.1533, LR: 0.00e+00
+Pixel Accuracy: 0.8154, mIoU: 0.4396
+Test (best val checkpoint):
+Pixel Accuracy: 0.8126, mIoU: 0.4441

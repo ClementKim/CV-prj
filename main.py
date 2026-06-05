@@ -250,14 +250,14 @@ def main(args):
 
     best_miou = -1.0
     best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
-    for epoch in range(args.epochs):
+    for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
             loss = train_step(model, batch_data, loss_fn, optimizer, scaler, device)
             scheduler.step()
             if loss is not None:
                 running_loss += loss; num_batches += 1
-        print(f'Epoch: {epoch+1}, Average Loss: {running_loss / max(1, num_batches):.4f}, LR: {scheduler.get_last_lr()[0]:.2e}')
+        print(f'Epoch: {epoch}, Average Loss: {running_loss / max(1, num_batches):.4f}, LR: {scheduler.get_last_lr()[0]:.2e}')
 
         _, miou = evaluate(model, val_loader, num_classes, device)
         if miou > best_miou:

@@ -4,7 +4,7 @@
 
 | Item               | Details                                                                                             |
 |--------------------|-----------------------------------------------------------------------------------------------------|
-| **OS / Kernel**    | Ubuntu 24.04                                                                                        |
+| **OS / Kernel**    | Ubuntu 24.04.4 LTS                                                                                  |
 | **GPU**            | NVIDIA GeForce RTX 3090 (24GB VRAM)                                                                 |
 | **Python**         | 3.10.14 (`Conda`) · 3.13.5 (`venv`)                                                                 |
 | **Core Libraries** | torch · torchvision · numpy · timm · pillow                                                         |

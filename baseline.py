@@ -10,7 +10,7 @@ import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from main import AugmentSeg, compute_class_weights, train_step, evaluate
 from torch.utils.data import DataLoader, random_split
-from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
+from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX
 
 def load_model(model_name, num_classes):
     if model_name.lower() == "unet":
@@ -77,7 +77,7 @@ def load_model(model_name, num_classes):
         )
 
     elif model_name.lower() == "upernet":
-        model = smp.UperNet(
+        model = smp.UPerNet(
             encoder_name = "resnet34",
             encoder_weights = "imagenet",
             classes = num_classes
@@ -103,15 +103,7 @@ def load_model(model_name, num_classes):
     return model
 
 def main(args):
-    img_size = IMG_SIZE        # 512; ViT positional embedding is interpolated to this size
-    patch_size = args.patch_size
-    embed_dim = args.embed_dim
-    num_heads = args.num_heads
-    mlp_ratio = args.mlp_ratio
-    drop = args.drop
-    attn_drop = args.attn_drop
-
-    batch = args.batch                  # 512x512 with 4 ViT experts is heavy; raise if memory allows
+    batch = args.batch
     lr = args.lr
     weight_decay = args.weight_decay
 
@@ -200,24 +192,19 @@ def main(args):
 
 if __name__ == "__main__":
     arg = argparse.ArgumentParser()
+
+    arg.add_argument('--model', type = str, default = 'unet', choices = ['unet', 'unet++', 'fpn', 'pspnet', 'deeplabv3', 'deeplabv3+', 'linknet', 'manet', 'pan', 'upernet', 'segformer', 'dpt'])
     
     arg.add_argument('--seed', type = int, default = 42)
 
-    arg.add_argument('--dataset', type = str, default = 'minc', choices = ['minc', 'opensurfaces', 'both'])
+    arg.add_argument('--dataset', type = str, default = 'both', choices = ['minc', 'opensurfaces', 'both'])
 
-    arg.add_argument('--batch', type = int, default = 4)
+    arg.add_argument('--batch', type = int, default = 16)
     arg.add_argument('--epochs', type = int, default = 30)
     arg.add_argument('--warmup_epochs', type = int, default = 1)
-
-    arg.add_argument('--patch_size', type = int, default = 16)
-    arg.add_argument('--embed_dim', type = int, default = 512)
-    arg.add_argument('--num_heads', type = int, default = 8)
-    arg.add_argument('--mlp_ratio', type = float, default = 2.0)
-    arg.add_argument('--drop', type = float, default = 0.1)
-    arg.add_argument('--attn_drop', type = float, default = 0.1)
     
-    arg.add_argument('--lr', type = float, default = 5e-5)
-    arg.add_argument('--weight_decay', type = float, default = 0.01)
+    arg.add_argument('--lr', type = float, default = 3e-4)
+    arg.add_argument('--weight_decay', type = float, default = 0.05)
 
     arg.add_argument('--weight_pow', type = float, default = 0.5)        # class weight = (1 / freq) ** weight_pow; 0 disables
     arg.add_argument('--max_class_weight', type = float, default = 10.0)
