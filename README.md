@@ -7,7 +7,7 @@
 | **OS / Kernel**    | Ubuntu 24.04.4 LTS                                                                                  |
 | **GPU**            | NVIDIA GeForce RTX 3090 (24GB VRAM)                                                                 |
 | **Python**         | 3.10.14 (`Conda`)                                                                                   |
-| **Core Libraries** | torch · torchvision · numpy · timm · pillow · matplotlib                                            |
+| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib                          |
 
 
 ## 2. How to run

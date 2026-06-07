@@ -24,7 +24,6 @@ python3 main.py \
     --max_class_weight 10.0 \
     --workers 8 \
     --dataset both \
-    --timestamp ${TIME} \
     > log/log_v3_${SEED}_both_${TIME}.log \
     2> log/err_v3_${SEED}_both_${TIME}.log
 
