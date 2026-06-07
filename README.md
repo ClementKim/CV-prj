@@ -1,6 +1,6 @@
 # Computer Vision Final Project
 
-**This project was completed as the Final Project for ‘Computer Vision 2026’ at GIST, supervised by Professor Kwanyoung Kim.**
+**This project was completed as the Final Project for `Computer Vision 2026` at GIST, supervised by Professor Kwanyoung Kim.**
 
 
 ### Author
