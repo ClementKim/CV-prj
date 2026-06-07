@@ -1,4 +1,5 @@
 import os
+import timm
 import torch
 import random
 import argparse
@@ -8,7 +9,7 @@ import torch.nn as nn
 import segmentation_models_pytorch as smp
 
 from tqdm import tqdm
-from main import AugmentSeg, compute_class_weights, train_step, evaluate
+from main import AugmentSeg, compute_class_weights, train_step, evaluate, loss_fn
 from torch.utils.data import DataLoader, random_split
 from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
 
@@ -113,16 +114,19 @@ def main(args):
 
     seed = args.seed
 
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
     random.seed(seed)
     np.random.seed(seed)
+
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    # Seeded for approximate reproducibility, but not bit-exact:
-    # Flash Attention + 2D cross-entropy have no deterministic GPU kernel,
-    # so we let cuDNN auto-tune for speed instead of forcing determinism.
-    torch.backends.cudnn.benchmark = True
-    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    torch.use_deterministic_algorithms(True, warn_only = True)
 
     # Allow TF32 on Ampere+ GPUs for faster matmuls
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -163,7 +167,7 @@ def main(args):
         [{'params': backbone_params, 'lr': lr * args.backbone_lr_mult},
          {'params': head_params, 'lr': lr}],
         lr = lr, weight_decay = weight_decay)
-    loss_fn = nn.CrossEntropyLoss(weight = class_weights, ignore_index = IGNORE_INDEX)
+    
     scaler = torch.amp.GradScaler('cuda', enabled = (device == 'cuda'))
 
     steps_per_epoch = max(1, len(train_loader))
@@ -181,7 +185,7 @@ def main(args):
     for epoch in range(args.epochs):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
-            loss = train_step(model, batch_data, loss_fn, optimizer, scaler, device)
+            loss = train_step(model, batch_data, class_weights, optimizer, scaler, device)
             scheduler.step()
             if loss is not None:
                 running_loss += loss; num_batches += 1

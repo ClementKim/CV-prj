@@ -211,13 +211,13 @@ class DecoderCrossAttention(nn.Module):
         self.o = nn.Linear(embed_dim, embed_dim)
         self.dropout = nn.Dropout(drop)
 
-    def forward(self, x, memory):               # x: [B, N, D] queries, memory: [B, M, D] (per-sample, unlike the shared aux above)
+    def forward(self, x, context_tokens):               # x: [B, N, D] queries, context_tokens: [B, M, D] (per-sample, unlike the shared aux above)
         B, N, D = x.shape
-        M = memory.shape[1]
+        M = context_tokens.shape[1]
 
         q = self.q(x).reshape(B, N, self.num_heads, self.head_dim).transpose(1, 2)
-        k = self.k(memory).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
-        v = self.v(memory).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
+        k = self.k(context_tokens).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
+        v = self.v(context_tokens).reshape(B, M, self.num_heads, self.head_dim).transpose(1, 2)
 
         A = F.softmax(q @ k.transpose(2, 3) * self.scale, dim = -1)
 
@@ -236,21 +236,21 @@ class DecoderBlock(nn.Module):
         self.norm3 = nn.LayerNorm(dim)
         self.mlp = MLP(in_features = dim, hidden_features = int(dim * mlp_ratio), drop = drop)
 
-    def forward(self, x, memory):
+    def forward(self, x, context_tokens):
         x = x + self.self_attn(self.norm1(x))
-        x = x + self.cross_attn(self.norm2(x), memory)
+        x = x + self.cross_attn(self.norm2(x), context_tokens)
         x = x + self.mlp(self.norm3(x))
 
         return x
 
 class TransformerDecoder(nn.Module):
     """Per-pixel segmentation head: ViT spatial tokens (queries) cross-attend to the global
-    material descriptor (memory), then a per-token linear predicts the class; upsample to input size."""
-    def __init__(self, embed_dim, num_classes, num_heads, mlp_ratio, drop, attn_drop, depth = 2, num_memory = 16):
+    material descriptor (context tokens), then a per-token linear predicts the class; upsample to input size."""
+    def __init__(self, embed_dim, num_classes, num_heads, mlp_ratio, drop, attn_drop, depth = 2, num_context = 16):
         super(TransformerDecoder, self).__init__()
 
-        self.num_memory = num_memory
-        self.to_memory = nn.Linear(embed_dim, num_memory * embed_dim)   # global descriptor -> memory tokens
+        self.num_context = num_context
+        self.to_context = nn.Linear(embed_dim, num_context * embed_dim)   # global descriptor -> context tokens
         self.blocks = nn.ModuleList([
             DecoderBlock(dim = embed_dim, num_heads = num_heads, mlp_ratio = mlp_ratio, drop = drop, attn_drop = attn_drop)
             for _ in range(depth)])
@@ -261,10 +261,10 @@ class TransformerDecoder(nn.Module):
         B, D, h, w = spatial.shape
 
         tokens = spatial.flatten(2).transpose(1, 2)                          # [B, N, D] queries
-        memory = self.to_memory(descriptor).reshape(B, self.num_memory, D)   # [B, M, D] memory
+        context_tokens = self.to_context(descriptor).reshape(B, self.num_context, D)   # [B, M, D] context tokens
 
         for block in self.blocks:
-            tokens = block(tokens, memory)
+            tokens = block(tokens, context_tokens)
 
         logits = self.classifier(self.norm(tokens))                          # [B, N, num_classes]
         logits = logits.transpose(1, 2).reshape(B, -1, h, w)                 # [B, num_classes, h, w]

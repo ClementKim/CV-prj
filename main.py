@@ -203,10 +203,6 @@ def main(args):
 
     torch.use_deterministic_algorithms(True, warn_only = True)
 
-    # timm's ViT uses fused scaled_dot_product_attention by default; under fp16 AMP that
-    # dispatches to the flash kernel whose BACKWARD is non-deterministic (atomic grad accum),
-    # which warn_only=True silently allows. Force the plain matmul+softmax path so the
-    # encoder's attention is reproducible. Must run before DualEncoder builds the ViT.
     timm.layers.set_fused_attn(False)
 
     # Allow TF32 on Ampere+ GPUs for faster matmuls
@@ -260,10 +256,7 @@ def main(args):
     model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool, auxiliary_tokens, decoder).to(device)
 
     if args.weight_pow > 0:
-        if args.timestamp is not None:
-            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
-        else:
-            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
         class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
         print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
     else:
@@ -280,7 +273,7 @@ def main(args):
         [{'params': backbone_params, 'lr': lr * args.backbone_lr_mult},
          {'params': head_params, 'lr': lr}],
         lr = lr, weight_decay = weight_decay)
-    # loss_fn = nn.CrossEntropyLoss(weight = class_weights, ignore_index = IGNORE_INDEX)
+    
     scaler = torch.amp.GradScaler('cuda', enabled = (device == 'cuda'))
 
     # Per-step warmup -> cosine decay: stabilizes the early from-scratch steps, then anneals.
@@ -295,10 +288,7 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    if args.timestamp is not None:
-        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')
-    else:
-        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
+    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
     for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
@@ -347,9 +337,6 @@ if __name__ == '__main__':
     parser.add_argument('--backbone_lr_mult', type = float, default = 0.1)  # pretrained backbone LR = lr * this
     parser.add_argument('--pretrained', action = 'store_true', default = True)
     parser.add_argument('--no_pretrained', dest = 'pretrained', action = 'store_false')
-
-    # This argument is to check reproducibility
-    parser.add_argument('--timestamp', type = str, default = None)
 
     args = parser.parse_args()
     main(args)
