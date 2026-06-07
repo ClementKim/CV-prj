@@ -16,7 +16,11 @@
 
 #### 1) MINC
 
-**Attach a link on here**
+Download from **Attach a link on here** and type the following command below:
+
+```sh
+tar -xvf MINC.tar
+```
 
 #### 2) Opensurface (Implemented in install.sh)
 
@@ -50,6 +54,8 @@ For the reproducibility, we implemented reproducibility code in **main.py** and 
 ## 4. AI tools used
 <!-- Edit here -->
 We used Claude Code on Visual Studio Code. We used this AI tool to verify logics, to solve error, and to receive suggestions.
+And to convert python2 code (process_opensurfaces_release_0.py) into python3 code.
+And to create plot.py and image.py.
 
 ## 5. Baseline sources
 

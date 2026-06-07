@@ -10,7 +10,7 @@ import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from main import AugmentSeg, compute_class_weights, train_step, evaluate
 from torch.utils.data import DataLoader, random_split
-from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX
+from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
 
 def load_model(model_name, num_classes):
     if model_name.lower() == "unet":
@@ -91,10 +91,14 @@ def load_model(model_name, num_classes):
         )
 
     elif model_name.lower() == "dpt":
+        # ViT encoder has a fixed patch grid / positional embedding; tell it the
+        # real input resolution so it builds (and interpolates the pretrained
+        # pos-embed for) IMG_SIZE instead of the backbone's default 224.
         model = smp.DPT(
             encoder_name = "tu-vit_base_patch16_224.augreg_in21k",
             encoder_weights = "imagenet",
-            classes = num_classes
+            classes = num_classes,
+            img_size = IMG_SIZE
         )
 
     else:
@@ -114,7 +118,11 @@ def main(args):
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    # Seeded for approximate reproducibility, but not bit-exact:
+    # Flash Attention + 2D cross-entropy have no deterministic GPU kernel,
+    # so we let cuDNN auto-tune for speed instead of forcing determinism.
     torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
 
     # Allow TF32 on Ampere+ GPUs for faster matmuls
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -128,7 +136,7 @@ def main(args):
     test_size = max(1, int(0.1 * n))
     val_size = max(1, int(0.1 * n))
     train_size = n - val_size - test_size                   # 80 / 10 / 10 train / val / test
-    train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size], generator = torch.Generator().manual_seed(42))
+    train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size], generator = torch.Generator().manual_seed(seed))
 
     train_loader = DataLoader(AugmentSeg(train_set), batch_size = batch, shuffle = True,
                               collate_fn = seg_collate_fn, num_workers = args.workers, pin_memory = True)
@@ -169,7 +177,7 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
+    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.model}.pt')
     for epoch in range(args.epochs):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):

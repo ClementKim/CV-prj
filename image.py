@@ -11,6 +11,7 @@ Example
 """
 
 import os
+import random
 import colorsys
 import argparse
 
@@ -81,6 +82,19 @@ def load_checkpoint(path):
 
 
 def main(args):
+    seed = args.seed
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = True
+
+    # Allow TF32 on Ampere+ GPUs for faster matmuls
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+
     device = ("cuda" if torch.cuda.is_available()
               else "mps" if torch.backends.mps.is_available() else "cpu")
     print(f"Using device: {device}")
@@ -90,12 +104,18 @@ def main(args):
 
     state = load_checkpoint(args.ckpt_path)
 
-    # Infer num_classes straight from the trained head so the model always matches
-    # the checkpoint, even if the dataset on disk has a different class count.
+    # Infer num_classes and embed_dim straight from the trained head so the model
+    # always matches the checkpoint, regardless of the dataset on disk or the
+    # --embed_dim default. classifier.weight is [num_classes, embed_dim].
     if "decoder.classifier.weight" in state:
         num_classes = state["decoder.classifier.weight"].shape[0]
+        embed_dim = state["decoder.classifier.weight"].shape[1]
+        if embed_dim != args.embed_dim:
+            print(f"[info] checkpoint embed_dim={embed_dim} overrides "
+                  f"--embed_dim {args.embed_dim}")
     else:
         num_classes = dataset.num_classes
+        embed_dim = args.embed_dim
     if num_classes == dataset.num_classes:
         class_names = dataset.class_names
     else:
@@ -103,19 +123,19 @@ def main(args):
               f"'{args.dataset}' has {dataset.num_classes}; using generic names.")
         class_names = [str(i) for i in range(num_classes)]
 
-    encoder = DualEncoder(IMG_SIZE, args.embed_dim, pretrained=args.pretrained)
+    encoder = DualEncoder(IMG_SIZE, embed_dim, pretrained=args.pretrained)
     self_expert_pool = nn.ModuleList([
-        SelfExpert(img_size=args.embed_dim, patch_size=args.patch_size, in_channels=1,
-                   embed_dim=args.embed_dim, num_heads=args.num_heads,
+        SelfExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
+                   embed_dim=embed_dim, num_heads=args.num_heads,
                    mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
         for _ in range(2)])
     cross_expert_pool = nn.ModuleList([
-        CrossExpert(img_size=args.embed_dim, patch_size=args.patch_size, in_channels=1,
-                    embed_dim=args.embed_dim, num_heads=args.num_heads,
+        CrossExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
+                    embed_dim=embed_dim, num_heads=args.num_heads,
                     mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
         for _ in range(2)])
-    auxiliary_tokens = torch.randn(args.embed_dim, args.embed_dim)
-    decoder = TransformerDecoder(embed_dim=args.embed_dim, num_classes=num_classes,
+    auxiliary_tokens = torch.randn(embed_dim, embed_dim)
+    decoder = TransformerDecoder(embed_dim=embed_dim, num_classes=num_classes,
                                  num_heads=args.num_heads, mlp_ratio=args.mlp_ratio,
                                  drop=args.drop, attn_drop=args.attn_drop)
 
@@ -189,9 +209,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_images", type=int, default=6)
     parser.add_argument("--indices", type=int, nargs="+", default=None,
                         help="explicit sample indices into the test split (overrides --num_images)")
-    parser.add_argument("--output", type=str, default="vis/predictions.png")
+    parser.add_argument("--output", type=str, default="output/predictions.png")
 
     # Must match the trained model's hyperparameters.
+    parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--patch_size", type=int, default=16)
     parser.add_argument("--embed_dim", type=int, default=512)
     parser.add_argument("--num_heads", type=int, default=8)

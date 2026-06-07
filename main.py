@@ -2,6 +2,7 @@ import os
 import torch
 import random
 import argparse
+import timm
 
 import numpy as np
 import torch.nn as nn
@@ -78,7 +79,7 @@ class ProposedMethod(nn.Module):
 
         return self.decoder(descriptor, spatial, (H, W))    # [B, num_classes, H, W]
 
-def train_step(model, batch, loss_fn, optimizer, scaler, device):
+def train_step(model, batch, class_weights, optimizer, scaler, device):
     model.train()
     optimizer.zero_grad(set_to_none = True)
 
@@ -86,7 +87,7 @@ def train_step(model, batch, loss_fn, optimizer, scaler, device):
     images, labels = images.to(device), labels.to(device)
 
     with torch.autocast(device_type = 'cuda', dtype = torch.float16, enabled = (device == 'cuda')):
-        loss = loss_fn(model(images), labels)
+        loss = loss_fn(class_weights, model(images), labels)
 
     if not torch.isfinite(loss):                            # all-void / overflow batch: skip, don't poison weights
         return None
@@ -160,6 +161,19 @@ def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight,
         torch.save(weights, cache_path)
     return weights.to(device)
 
+def loss_fn(class_weights, logits, labels):
+    per_pixel = nn.functional.cross_entropy(
+        logits, labels, weight = class_weights,
+        ignore_index = IGNORE_INDEX, reduction = 'none')      # [B, H, W], 0 at ignored pixels
+    valid = labels != IGNORE_INDEX                            # True at real (non-void) pixels
+    denom = valid.sum() if class_weights is None else class_weights[labels[valid]].sum()
+    return per_pixel.sum() / denom.clamp(min = 1)
+
+def seed_workers(worker_id):
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
 def main(args):
     img_size = IMG_SIZE        # 512; ViT positional embedding is interpolated to this size
     patch_size = args.patch_size
@@ -175,12 +189,25 @@ def main(args):
 
     seed = args.seed
 
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
     random.seed(seed)
     np.random.seed(seed)
+
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    torch.use_deterministic_algorithms(True, warn_only = True)
+
+    # timm's ViT uses fused scaled_dot_product_attention by default; under fp16 AMP that
+    # dispatches to the flash kernel whose BACKWARD is non-deterministic (atomic grad accum),
+    # which warn_only=True silently allows. Force the plain matmul+softmax path so the
+    # encoder's attention is reproducible. Must run before DualEncoder builds the ViT.
+    timm.layers.set_fused_attn(False)
 
     # Allow TF32 on Ampere+ GPUs for faster matmuls
     torch.backends.cuda.matmul.allow_tf32 = True
@@ -196,14 +223,30 @@ def main(args):
     test_size = max(1, int(0.1 * n))
     val_size = max(1, int(0.1 * n))
     train_size = n - val_size - test_size                   # 80 / 10 / 10 train / val / test
-    train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size], generator = torch.Generator().manual_seed(42))
+    train_set, val_set, test_set = random_split(dataset, [train_size, val_size, test_size], generator = torch.Generator().manual_seed(seed))
 
-    train_loader = DataLoader(AugmentSeg(train_set), batch_size = batch, shuffle = True,
-                              collate_fn = seg_collate_fn, num_workers = args.workers, pin_memory = True)
-    val_loader = DataLoader(val_set, batch_size = batch, shuffle = False,
-                            collate_fn = seg_collate_fn, num_workers = args.workers, pin_memory = True)
-    test_loader = DataLoader(test_set, batch_size = batch, shuffle = False,
-                             collate_fn = seg_collate_fn, num_workers = args.workers, pin_memory = True)
+    train_loader = DataLoader(AugmentSeg(train_set),
+                              batch_size = batch,
+                              shuffle = True,
+                              collate_fn = seg_collate_fn, 
+                              num_workers = args.workers, 
+                              worker_init_fn = seed_workers,
+                              pin_memory = True)
+
+    val_loader = DataLoader(val_set, batch_size = batch,
+                            shuffle = False,
+                            collate_fn = seg_collate_fn,
+                            num_workers = args.workers,
+                            worker_init_fn = seed_workers,
+                            pin_memory = True)
+
+    test_loader = DataLoader(test_set,
+                            batch_size = batch,
+                            shuffle = False,
+                            collate_fn = seg_collate_fn,
+                            num_workers = args.workers,
+                            worker_init_fn = seed_workers,
+                            pin_memory = True)
 
     encoder = DualEncoder(img_size, embed_dim, pretrained = args.pretrained)
 
@@ -217,7 +260,10 @@ def main(args):
     model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool, auxiliary_tokens, decoder).to(device)
 
     if args.weight_pow > 0:
-        cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        if args.timestamp is not None:
+            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
+        else:
+            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
         class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
         print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
     else:
@@ -234,7 +280,7 @@ def main(args):
         [{'params': backbone_params, 'lr': lr * args.backbone_lr_mult},
          {'params': head_params, 'lr': lr}],
         lr = lr, weight_decay = weight_decay)
-    loss_fn = nn.CrossEntropyLoss(weight = class_weights, ignore_index = IGNORE_INDEX)
+    # loss_fn = nn.CrossEntropyLoss(weight = class_weights, ignore_index = IGNORE_INDEX)
     scaler = torch.amp.GradScaler('cuda', enabled = (device == 'cuda'))
 
     # Per-step warmup -> cosine decay: stabilizes the early from-scratch steps, then anneals.
@@ -249,11 +295,14 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
+    if args.timestamp is not None:
+        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')
+    else:
+        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
     for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
-            loss = train_step(model, batch_data, loss_fn, optimizer, scaler, device)
+            loss = train_step(model, batch_data, class_weights, optimizer, scaler, device)
             scheduler.step()
             if loss is not None:
                 running_loss += loss; num_batches += 1
@@ -271,33 +320,36 @@ def main(args):
     evaluate(model, test_loader, num_classes, device)
 
 if __name__ == '__main__':
-    arg = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser()
     
-    arg.add_argument('--seed', type = int, default = 42)
+    parser.add_argument('--seed', type = int, default = 42)
 
-    arg.add_argument('--dataset', type = str, default = 'minc', choices = ['minc', 'opensurfaces', 'both'])
+    parser.add_argument('--dataset', type = str, default = 'minc', choices = ['minc', 'opensurfaces', 'both'])
 
-    arg.add_argument('--batch', type = int, default = 4)
-    arg.add_argument('--epochs', type = int, default = 30)
-    arg.add_argument('--warmup_epochs', type = int, default = 1)
+    parser.add_argument('--batch', type = int, default = 32)
+    parser.add_argument('--epochs', type = int, default = 20)
+    parser.add_argument('--warmup_epochs', type = int, default = 2)
 
-    arg.add_argument('--patch_size', type = int, default = 16)
-    arg.add_argument('--embed_dim', type = int, default = 512)
-    arg.add_argument('--num_heads', type = int, default = 8)
-    arg.add_argument('--mlp_ratio', type = float, default = 2.0)
-    arg.add_argument('--drop', type = float, default = 0.1)
-    arg.add_argument('--attn_drop', type = float, default = 0.1)
+    parser.add_argument('--patch_size', type = int, default = 16)
+    parser.add_argument('--embed_dim', type = int, default = 256)
+    parser.add_argument('--num_heads', type = int, default = 8)
+    parser.add_argument('--mlp_ratio', type = float, default = 2.0)
+    parser.add_argument('--drop', type = float, default = 0.1)
+    parser.add_argument('--attn_drop', type = float, default = 0.1)
     
-    arg.add_argument('--lr', type = float, default = 5e-5)
-    arg.add_argument('--weight_decay', type = float, default = 0.01)
+    parser.add_argument('--lr', type = float, default = 3e-4)
+    parser.add_argument('--weight_decay', type = float, default = 0.05)
 
-    arg.add_argument('--weight_pow', type = float, default = 0.5)        # class weight = (1 / freq) ** weight_pow; 0 disables
-    arg.add_argument('--max_class_weight', type = float, default = 10.0)
+    parser.add_argument('--weight_pow', type = float, default = 0.5)        # class weight = (1 / freq) ** weight_pow; 0 disables
+    parser.add_argument('--max_class_weight', type = float, default = 10.0)
 
-    arg.add_argument('--workers', type = int, default = 8)
-    arg.add_argument('--backbone_lr_mult', type = float, default = 0.1)  # pretrained backbone LR = lr * this
-    arg.add_argument('--pretrained', action = 'store_true', default = True)
-    arg.add_argument('--no_pretrained', dest = 'pretrained', action = 'store_false')
+    parser.add_argument('--workers', type = int, default = 8)
+    parser.add_argument('--backbone_lr_mult', type = float, default = 0.1)  # pretrained backbone LR = lr * this
+    parser.add_argument('--pretrained', action = 'store_true', default = True)
+    parser.add_argument('--no_pretrained', dest = 'pretrained', action = 'store_false')
 
-    args = arg.parse_args()
+    # This argument is to check reproducibility
+    parser.add_argument('--timestamp', type = str, default = None)
+
+    args = parser.parse_args()
     main(args)

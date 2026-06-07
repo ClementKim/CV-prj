@@ -1,15 +1,16 @@
 #!/bin/bash
 
-conda activate CV
+conda activate team15
 
-mkdir -p log output
+CUDA_VISIBLE_DEVICES=1
 
 SEED=44
+TIME=2
 
 python3 main.py \
     --seed ${SEED} \
     --batch 32 \
-    --epochs 20 \
+    --epochs 1 \
     --warmup_epochs 2 \
     --embed_dim 256 \
     --num_heads 8 \
@@ -23,12 +24,13 @@ python3 main.py \
     --max_class_weight 10.0 \
     --workers 8 \
     --dataset both \
-    > log/log_v3_${SEED}_both.log \
-    2> log/err_v3_${SEED}_both.log
+    --timestamp ${TIME} \
+    > log/log_v3_${SEED}_both_${TIME}.log \
+    2> log/err_v3_${SEED}_both_${TIME}.log
 
 python3 image.py \
     --seed ${SEED} \
-    --ckpt_path cache/best_both_c68.pt \
+    --ckpt_path cache/best_both_c68_${TIME}.pt \
     --dataset both \
-    --num_images 6 \
-    --output output/InteractSeg_${SEED}.png
+    --num_images 3 \
+    --output output/both_${SEED}_${TIME}.png

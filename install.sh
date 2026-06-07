@@ -47,6 +47,10 @@ if [ $BOTH -eq 0 ]; then
 
         unzip opensurfaces-release-0.zip
 
+        rm -rf process_opensurfaces_release_0.py # This file is python2 version. Therefore, remove this code and move the python3 version into the dataset directory
+
+        mv ../process_opensurfaces_release_0.py . # Move the python3 version into the dataset directory
+
         python3 process_opensurfaces_release_0.py
 
         cd ..
@@ -62,3 +66,4 @@ if [ $BOTH -eq 0 ]; then
             exit 1
         fi 
     fi
+fi
