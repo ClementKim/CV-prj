@@ -1,15 +1,3 @@
-"""Visualize the ProposedMethod segmentation output on the held-out test set.
-
-Loads a trained checkpoint, runs inference on test-split images, and writes a grid of
-[ input | ground truth | prediction ] panels (one row per image) plus a legend of the
-materials present. The train/val/test split is reproduced exactly as in main.py
-(generator seed 42), so this shows genuinely held-out evaluation images.
-
-Example
--------
-    python image.py cache/best_minc_c23.pt --dataset minc --num_images 6
-"""
-
 import os
 import random
 import colorsys
@@ -20,7 +8,7 @@ import torch
 import torch.nn as nn
 
 import matplotlib
-matplotlib.use("Agg")                       # file output, no display needed
+matplotlib.use("Agg")                 # file output, no display needed
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 

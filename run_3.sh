@@ -30,7 +30,7 @@ python3 image.py \
     --num_images 3 \
     --output output/both_${SEED}.png
 
-for MODEL in unet unet++ fpn deeplabv3 deeplabv3+ linknet manet pan segformer;
+for MODEL in manet segformer;
 do 
     python3 baseline.py \
         --model ${MODEL} \

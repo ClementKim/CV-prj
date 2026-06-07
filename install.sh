@@ -2,26 +2,14 @@
 
 conda env list | awk '{print $1}' | grep -qx team15 && ENV_EXISTS=0 || ENV_EXISTS=1
 
-if [ $? -ne 0 ]; then
-    ls -al | awk '{print $9}' | grep -qx team15 && ENV_EXISTS=0 || ENV_EXISTS=1
-fi
-
 if [ $ENV_EXISTS -ne 0 ]; then
     echo "Starting environment setup"
 
     conda create -n team15 python=3.10.14
 
-    if [ $? -ne 0 ]; then
-        python -m venv team15
-        source team15/bin/activate
-        pip install --upgrade pip
-
-    else
-        conda activate team15
-
-    fi
-
-    pip install torch torchvision timm numpy pillow
+    conda activate team15
+    
+    pip install torch torchvision timm numpy pillow matplotlib
 
     echo "Environment setup complete"
 fi
@@ -40,6 +28,7 @@ if [ $BOTH -eq 0 ]; then
         echo "Download Opensurface dataset"
 
         mkdir -p opensurfaces-data
+
         cd opensurfaces-data
 
         wget http://labelmaterial.s3.amazonaws.com/release/opensurfaces-release-0.zip

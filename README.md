@@ -6,37 +6,17 @@
 |--------------------|-----------------------------------------------------------------------------------------------------|
 | **OS / Kernel**    | Ubuntu 24.04.4 LTS                                                                                  |
 | **GPU**            | NVIDIA GeForce RTX 3090 (24GB VRAM)                                                                 |
-| **Python**         | 3.10.14 (`Conda`) · 3.13.5 (`venv`)                                                                 |
-| **Core Libraries** | torch · torchvision · numpy · timm · pillow                                                         |
+| **Python**         | 3.10.14 (`Conda`)                                                                                   |
+| **Core Libraries** | torch · torchvision · numpy · timm · pillow · matplotlib                                            |
 
 
 ## 2. How to run
 
-### 2-1. To download dataset
+### 2-1. To download MINC & Opensurface dataset
 
-#### 1) MINC
+Download from **[Dataset Download](https://drive.google.com/drive/folders/1BJFKH0cRnT5ZZMy1MzJZQfKx1G0y6-C0?usp=sharing)**. Extracing tar files is going to be performed by **install.sh**.
 
-Download from **Attach a link on here** and type the following command below:
-
-```sh
-tar -xvf MINC.tar
-```
-
-#### 2) Opensurface (Implemented in install.sh)
-
-```sh
-mkdir opensurfaces-data
-cd opensurfaces-data
-
-wget http://labelmaterial.s3.amazonaws.com/release/opensurfaces-release-0.zip
-wget http://labelmaterial.s3.amazonaws.com/release/process_opensurfaces_release_0.py
-
-unzip opensurfaces-release-0.zip
-
-python3 process_opensurfaces_release_0.py
-```
-
-### 2-1. To run
+### 2-2. To run
 ```sh
 source install.sh
 
@@ -49,13 +29,39 @@ source run.sh false # Currently run_train.sh
 
 ## 3. Reproducibility scope
 
-For the reproducibility, we implemented reproducibility code in **main.py** and provided model checkpoint on Attach link .
+For the reproducibility, we implemented reproducibility code in **main.py** and provided model checkpoint on Attach link.
 
 ## 4. AI tools used
 <!-- Edit here -->
 We used Claude Code on Visual Studio Code. We used this AI tool to verify logics, to solve error, and to receive suggestions.
 And to convert python2 code (process_opensurfaces_release_0.py) into python3 code.
 And to create plot.py and image.py.
+
+For implementation support we used Claude Code (Anthropic) running inside
+Visual Studio Code. All design decisions were made by the human authors, who
+reviewed every change and ran and validated all experiments; the AI was used
+to draft code, refactor existing code, debug, and explain.
+
+The AI was applied in the following places. It helped convert the original
+CIFAR-10 classifier into a per-pixel material-segmentation pipeline for the
+MINC dataset, which mainly affected main.py, encoder.py, and preprocessing.py.
+For the model architecture, it was used to draft and refactor the dual-encoder
+(a pretrained timm ViT-S together with a torchvision ResNet34), the
+mixture-of-experts modules, and the segmentation decoder in encoder.py and
+transformer.py. On the data side, it helped implement collate_fn and the MINC
+mask handling in preprocessing.py, and it converted
+process_opensurfaces_release_0.py from Python 2 to Python 3.
+
+We also used it for debugging and diagnosis: resolving NaN loss, a CUDA/NVML
+driver-version mismatch, and a non-deterministic nll_loss2d warning, and
+identifying that our initially low mIoU was caused by class collapse from
+severe pixel imbalance. Based on that diagnosis it suggested the fixes we
+adopted, namely pretrained encoders, data augmentation, automatic mixed
+precision, a differential learning rate, and best-validation checkpointing.
+Finally, it helped implement the reproducibility settings (seeding and
+deterministic algorithms) in main.py, set up the segmentation_models_pytorch
+baseline sweep in baseline.py and run_3.sh, write the plotting and
+visualization utilities plot.py and image.py, and draft parts of this README.
 
 ## 5. Baseline sources
 

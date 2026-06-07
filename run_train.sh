@@ -2,10 +2,6 @@
 
 conda activate team15
 
-if [ $? -ne 0 ]; then
-    source team15/bin/activate
-fi
-
 mkdir -p log
 
 declare -l TRAIN_VALUE
