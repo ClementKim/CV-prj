@@ -2,34 +2,61 @@
 
 ## 1. Environment & Requirements
 
-| Item               | Details                                                                                             |
-|--------------------|-----------------------------------------------------------------------------------------------------|
-| **OS / Kernel**    | Ubuntu 24.04.4 LTS                                                                                  |
-| **GPU**            | NVIDIA GeForce RTX 3090 (24GB VRAM)                                                                 |
-| **Python**         | 3.10.14 (`Conda`)                                                                                   |
-| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib                          |
+| Item               | Details                                                                                                  |
+|--------------------|----------------------------------------------------------------------------------------------------------|
+| **OS / Kernel**    | Ubuntu 22.04.3 LTS                                                                                       |
+| **GPU**            | NVIDIA A100-SXM4-40GB                                                                                    |
+| **Python**         | 3.10.14 (**Conda**)                                                                                      |
+| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib · segmentation_models_pytorch |
 
 
 ## 2. How to run
 
 ### 2-1. To download MINC & Opensurface dataset
 
-Download from **[Dataset Download](https://drive.google.com/drive/folders/1BJFKH0cRnT5ZZMy1MzJZQfKx1G0y6-C0?usp=sharing)**. Extracing tar files is going to be performed by **install.sh**.
+Download from **[Dataset Download](https://drive.google.com/drive/folders/1BJFKH0cRnT5ZZMy1MzJZQfKx1G0y6-C0?usp=sharing)**.
+
+To extract tar files will be performed automatically by **install.sh**.
 
 ### 2-2. To run
 ```sh
+# install.sh will automatically extract tar files, set up the environment, and install necessary libraries.
 source install.sh
 
-# With full training
-source run.sh true # Currently run_train.sh
+# With checking reproducibility
+# In this case, model trains three times.
+source run.sh true
 
-# With check point
-source run.sh false # Currently run_train.sh
+# Without checking reproducibility
+# In this case, model trains once.
+source run.sh false
+
+# To run baseline experiment --- We trained baseline models from scratch.
+source baseline.sh
 ```
 
 ## 3. Reproducibility scope
 
-For the reproducibility, we implemented reproducibility code in **main.py** and provided model checkpoint on Attach link.
+For the reproducibility, we added in **main.py** and **baseline.py** as follows:
+```py
+seed = args.seed
+
+os.environ["PYTHONHASHSEED"] = str(seed)
+os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
+
+random.seed(seed)
+np.random.seed(seed)
+
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
+torch.use_deterministic_algorithms(True, warn_only = True)
+
+timm.layers.set_fused_attn(False)
+```
 
 ## 4. AI tools used
 <!-- Edit here -->
@@ -65,7 +92,31 @@ visualization utilities plot.py and image.py, and draft parts of this README.
 
 ## 5. Baseline sources
 
-**Attach tables if it is possible**
+<!-- Version 1 -->
+| Baseline Model         | Paper                                                                                                                   |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| Unet                   | **[Paper Link](https://arxiv.org/pdf/1505.04597)**                                                                      |
+| Unet++                 | **[Paper Link](https://arxiv.org/pdf/1807.10165)**                                                                      |
+| FPN                    | **[Link](http://presentations.cocodataset.org/COCO17-Stuff-FAIR.pdf)**                                                  |
+| DeepLabV3              | **[Paper Link](https://arxiv.org/pdf/1706.05587)**                                                                      |
+| DeepLabV3++            | **[Paper Link](https://arxiv.org/pdf/1802.02611)**                                                                      |
+| Linknet                | **[Paper Link](https://arxiv.org/pdf/1707.03718)**                                                                      |
+| MAnet                  | **[Paper Link](https://ieeexplore.ieee.org/abstract/document/9201310)**                                                 |
+| PAN                    | **[Paper Link](https://arxiv.org/pdf/1805.10180)**                                                                      |
+| Segformer (NeurIPS 21) | **[Paper Link](https://proceedings.neurips.cc/paper_files/paper/2021/file/64f1f27bf1b4ec22924fd0acb550c235-Paper.pdf)** |
+
+<!-- Version 2 -->
+| Baseline Model         | Paper                                                                                                                   |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| Unet                   | Ronneberger, O., Fischer, P., & Brox, T. (2015, October). U-net: Convolutional networks for biomedical image segmentation. In International Conference on Medical image computing and computer-assisted intervention (pp. 234-241). Cham: Springer international publishing.                                                                      |
+| Unet++                 | Zhou, Z., Rahman Siddiquee, M. M., Tajbakhsh, N., & Liang, J. (2018, September). Unet++: A nested u-net architecture for medical image segmentation. In International workshop on deep learning in medical image analysis (pp. 3-11). Cham: Springer International Publishing.                                                                      |
+| FPN                    | Kirillov, A., He, K., Girshick, R., & Dollár, P. (2017, July). A unified architecture for instance and semantic segmentation. In Computer Vision and Pattern Recognition Conference. CVPR.                                                 |
+| DeepLabV3              | Chen, L. C., Papandreou, G., Schroff, F., & Adam, H. (2017). Rethinking atrous convolution for semantic image segmentation. arXiv preprint arXiv:1706.05587.                                                                      |
+| DeepLabV3++            | Chen, L. C., Zhu, Y., Papandreou, G., Schroff, F., & Adam, H. (2018). Encoder-decoder with atrous separable convolution for semantic image segmentation. In Proceedings of the European conference on computer vision (ECCV) (pp. 801-818).                                                                      |
+| Linknet                | Chaurasia, A., & Culurciello, E. (2017, December). Linknet: Exploiting encoder representations for efficient semantic segmentation. In 2017 IEEE visual communications and image processing (VCIP) (pp. 1-4). IEEE.                                                                      |
+| MAnet                  | Fan, T., Wang, G., Li, Y., & Wang, H. (2020). Ma-net: A multi-scale attention network for liver and tumor segmentation. Ieee Access, 8, 179656-179665.                                                 |
+| PAN                    | Li, H., Xiong, P., An, J., & Wang, L. (2018). Pyramid attention network for semantic segmentation. arXiv preprint arXiv:1805.10180.                                                                      |
+| Segformer (NeurIPS 21) | Xie, E., Wang, W., Yu, Z., Anandkumar, A., Alvarez, J. M., & Luo, P. (2021). SegFormer: Simple and efficient design for semantic segmentation with transformers. Advances in neural information processing systems, 34, 12077-12090. |
 
 <!-- 
 Execution environment (Python and key library versions, requirements, etc.)

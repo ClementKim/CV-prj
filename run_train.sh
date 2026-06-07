@@ -4,13 +4,23 @@ conda activate team15
 
 mkdir -p log
 
-declare -l TRAIN_VALUE
+declare -l CHECK_REPRODUCIBILITY
 
-TRAIN_VALUE=$1
+CHECK_REPRODUCIBILITY=$2
 
-if [ "$TRAIN_VALUE" -eq "true" ]; then
+if [ "$CHECK_REPRODUCIBILITY" -eq "true" ]; then
+    LOOP_START=1
+    LOOP_END=3
+else
+    LOOP_START=0
+    LOOP_END=0
+fi
+
+SEED=44
+
+for TIME in {${LOOP_START}..${LOOP_END}}; do
     python3 main.py \
-        --seed 42 \
+        --seed ${SEED} \
         --batch 8 \
         --epochs 30 \
         --warmup_epochs 2 \
@@ -26,12 +36,25 @@ if [ "$TRAIN_VALUE" -eq "true" ]; then
         --max_class_weight 10.0 \
         --workers 8 \
         --dataset both \
+        --time_stamp ${TIME} \
         > log/log_v3_42_both.log \
         2> log/err_v3_42_both.log
+done
 
+if [ ${LOOP_START} -ne 0 ]; then
+    for TIME in {${LOOP_START}..${LOOP_END}}; do
+        python3 image.py \
+            --seed ${SEED} \
+            --ckpt_path cache/best_both_c68_${TIME}.pt \
+            --dataset both \
+            --num_images 3 \
+            --output output/both_${SEED}_${TIME}.png
+    done
 else
-    python3 main.py \
-        --seed 42 \
-        --train ${TRAIN_VALUE} \
-        > log/log_v3_42_both.log \
-        2> log/err_v3_42_both.log
+    python3 image.py \
+            --seed ${SEED} \
+            --ckpt_path cache/best_both_c68.pt \
+            --dataset both \
+            --num_images 3 \
+            --output output/both_${SEED}_${TIME}.png
+fi

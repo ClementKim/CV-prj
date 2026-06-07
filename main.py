@@ -256,7 +256,10 @@ def main(args):
     model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool, auxiliary_tokens, decoder).to(device)
 
     if args.weight_pow > 0:
-        cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        if args.timestamp > 0:
+            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
+        else:
+            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
         class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
         print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
     else:
@@ -288,7 +291,10 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
+    if args.timestamp > 0:
+        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')    
+    else:
+        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
     for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
@@ -337,6 +343,9 @@ if __name__ == '__main__':
     parser.add_argument('--backbone_lr_mult', type = float, default = 0.1)  # pretrained backbone LR = lr * this
     parser.add_argument('--pretrained', action = 'store_true', default = True)
     parser.add_argument('--no_pretrained', dest = 'pretrained', action = 'store_false')
+
+    # This argument is to check reproducibility
+    parser.add_argument('--timestamp', type = str, default = None)
 
     args = parser.parse_args()
     main(args)

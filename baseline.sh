@@ -1,8 +1,7 @@
 #!/bin/bash
 
-conda activate CV
+conda activate team15
 
-# for SEED in 42 43 44;
 for SEED in 44;
 do
     for MODEL in unet unet++ fpn pspnet deeplabv3 deeplabv3+ linknet manet pan upernet segformer dpt;
@@ -21,5 +20,12 @@ do
             --dataset both \
             > log/log_${MODEL}_${SEED}_both.log \
             2> log/err_${MODEL}_${SEED}_both.log
+
+        python3 image.py \
+            --seed ${SEED} \
+            --ckpt_path cache/best_both_c68_${MODEL}.pt \
+            --dataset both \
+            --num_images 3 \
+            --output output/both_${SEED}_${TIME}.png
     done
 done
