@@ -14,45 +14,56 @@ if [ $ENV_EXISTS -ne 0 ]; then
     echo "Environment setup complete"
 fi
 
-ls | grep -qx opensurfaces-data && DATASET_EXISTS1=0 || DATASET_EXISTS1=1
-ls | grep -qx MINC && DATASET_EXISTS2=0 || DATASET_EXISTS2=1
+# Checking the existance of tar files
+ls | grep -qx MINC.tar && DATASET_EXISTS1=0 || DATASET_EXISTS1=1
+ls | grep -qx OPENSURFACE.tar && DATASET_EXISTS2=0 || DATASET_EXISTS2=1
 
-if [ $DATASET_EXISTS1 -ne 0  && $DATASET_EXISTS2 -ne 0]; then
-    BOTH=0
+if [ $DATASET_EXISTS1 -ne 0 ] && [ $DATASET_EXISTS2 -ne 0 ]; then
+    echo "Download tar files from https://drive.google.com/drive/folders/1BJFKH0cRnT5ZZMy1MzJZQfKx1G0y6-C0?usp=sharing"
+
 else
-    BOTH=1
-fi
+    if [ $DATASET_EXISTS1 -eq 0 ]; then
+        ls | grep -qx minc && DATASET_EXISTS3=0 || DATASET_EXISTS3=1
+        ls | grep -qx photo_orig && DATASET_EXISTS4=0 || DATASET_EXISTS4=1
 
-if [ $BOTH -eq 0 ]; then
-    if [ $DATASET_EXISTS1 -ne 0 ]; then
-        echo "Download Opensurface dataset"
+        if [ $DATASET_EXISTS3 -ne 0 ] && [ $DATASET_EXISTS4 -ne 0 ]; then
+            echo "Extracting MINC dataset"
 
-        mkdir -p opensurfaces-data
+            tar -xvf MINC.tar
 
-        cd opensurfaces-data
-
-        wget http://labelmaterial.s3.amazonaws.com/release/opensurfaces-release-0.zip
-        wget http://labelmaterial.s3.amazonaws.com/release/process_opensurfaces_release_0.py
-
-        unzip opensurfaces-release-0.zip
-
-        rm -rf process_opensurfaces_release_0.py # This file is python2 version. Therefore, remove this code and move the python3 version into the dataset directory
-
-        mv ../process_opensurfaces_release_0.py . # Move the python3 version into the dataset directory
-
-        python3 process_opensurfaces_release_0.py
-
-        cd ..
+            if [ $? -ne 0 ]; then
+                echo "Failed to extract MINC dataset. Please check the tar file and try again."
+                exit 1
+            
+            else
+                echo "MINC dataset extracted successfully"
+                rm -rf MINC.tar
+            fi
+        fi
     fi
 
-    if [ $DATASET_EXISTS2 -ne 0 ]; then
-        echo "Download MINC dataset"
+    if [ $DATASET_EXISTS2 -eq 0 ]; then
+        ls | grep -qx opensurfaces-data && DATASET_EXISTS5=0 || DATASET_EXISTS5=1
 
-        tar -xvf MINC.tar
+        if [ $DATASET_EXISTS5 -ne 0 ]; then
+            echo "Extracting opensurface dataset"
 
-        if [ $? -ne 0 ]; then
-            echo "Failed to extract MINC dataset. Please check the tar file and try again."
-            exit 1
-        fi 
+            mkdir -p opensurfaces-data
+
+            mv OPENSURFACE.tar opensurfaces-data/
+
+            cd opensurfaces-data
+
+            tar -xvf OPENSURFACE.tar
+
+            if [ $? -ne 0 ]; then
+                echo "Failed to extract opensurface dataset. Please check the tar file and try again."
+                exit 1
+            
+            else
+                echo "opensurface dataset extracted successfully"
+                rm -rf OPENSURFACE.tar
+            fi
+        fi
     fi
 fi
