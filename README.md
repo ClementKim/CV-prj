@@ -11,6 +11,7 @@
 
 3️⃣ **Jaeik Choi** from AI Convergence, Gwangju Institute of Science and Technology (GIST)
 
+
 ### 1. Environment & Requirements
 
 | Item               | Details                                                                                                  |
@@ -46,6 +47,7 @@ source run.sh false
 source baseline.sh
 ```
 
+
 ### 3. Reproducibility scope
 
 For the reproducibility, we added in **main.py** and **baseline.py** as follows:
@@ -69,37 +71,23 @@ torch.use_deterministic_algorithms(True, warn_only = True)
 timm.layers.set_fused_attn(False)
 ```
 
+Datasets that we used for training and testing are extracted by `install.sh`, and preprocessed by `preprocessing.py`.
+
+
 ### 4. AI tools used
 <!-- Edit here -->
-We used Claude Code on Visual Studio Code. We used this AI tool to verify logics, to solve error, and to receive suggestions.
-And to convert python2 code (process_opensurfaces_release_0.py) into python3 code.
-And to create plot.py and image.py.
+For implementation support, we used Claude Code running inside Visual Studio Code. The AI was used to draft code, refactor existing code, debugging, and explain. Specifically, The AI was applied in the following places.
 
-For implementation support we used Claude Code (Anthropic) running inside
-Visual Studio Code. All design decisions were made by the human authors, who
-reviewed every change and ran and validated all experiments; the AI was used
-to draft code, refactor existing code, debug, and explain.
+1. It helped convert the original CIFAR-10 classifier, this classifier was implemented for checking if our implementation works or not, into a per-pixel material-segmentation pipeline for the MINC dataset and Opensurface dataset.
 
-The AI was applied in the following places. It helped convert the original
-CIFAR-10 classifier into a per-pixel material-segmentation pipeline for the
-MINC dataset, which mainly affected main.py, encoder.py, and preprocessing.py.
-For the model architecture, it was used to draft and refactor the dual-encoder
-(a pretrained timm ViT-S together with a torchvision ResNet34), the
-mixture-of-experts modules, and the segmentation decoder in encoder.py and
-transformer.py. On the data side, it helped implement collate_fn and the MINC
-mask handling in preprocessing.py, and it converted
-process_opensurfaces_release_0.py from Python 2 to Python 3.
+2. For the model architecture, it was used to draft and refactor teh dual-encoder --- a pretrained timm ViT-S and torchvision ResNet34 ---, the mixture-of-experts modules, and the segmentation decoder in encoder.py and transformer.py.
 
-We also used it for debugging and diagnosis: resolving NaN loss, a CUDA/NVML
-driver-version mismatch, and a non-deterministic nll_loss2d warning, and
-identifying that our initially low mIoU was caused by class collapse from
-severe pixel imbalance. Based on that diagnosis it suggested the fixes we
-adopted, namely pretrained encoders, data augmentation, automatic mixed
-precision, a differential learning rate, and best-validation checkpointing.
-Finally, it helped implement the reproducibility settings (seeding and
-deterministic algorithms) in main.py, set up the segmentation_models_pytorch
-baseline sweep in baseline.py and run_3.sh, write the plotting and
-visualization utilities plot.py and image.py, and draft parts of this README.
+3. On the data side, it helped implement collte_fn and the MINC mask handling in preprocessing.py, and it converted process_opensurfaces_release_0.py from Python2 to Python3.
+
+4. We also used AI for debugging and diagnosis: resolving Nan loss, a CUDA/NVML driver-version mismatch, and a non-deterministic nll_loss2d warning, and solving class collapse from severe picel imabalance.
+
+5. Finally, AI helped set up the segmentation_models_pytorch baseline sweep in baseline.py, and write the plotting and visualization utilities plot.py and image.py.
+
 
 ### 5. Baseline sources
 

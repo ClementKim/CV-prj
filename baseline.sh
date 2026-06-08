@@ -4,7 +4,7 @@ conda activate team15
 
 for SEED in 44;
 do
-    for MODEL in unet unet++ fpn pspnet deeplabv3 deeplabv3+ linknet manet pan upernet segformer dpt;
+    for MODEL in unet unet++ fpn deeplabv3 deeplabv3+ linknet manet pan segformer;
     do 
         python3 baseline.py \
             --model ${MODEL} \
