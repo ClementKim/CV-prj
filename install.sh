@@ -62,6 +62,8 @@ else
                 echo "opensurface dataset extracted successfully"
                 rm -rf OPENSURFACE.tar
             fi
+
+            cd ..
         fi
     fi
 fi

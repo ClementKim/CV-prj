@@ -15,10 +15,16 @@ from matplotlib.patches import Patch
 from torch.utils.data import random_split
 
 from main import ProposedMethod
+from baseline import load_model as load_baseline_model
 from encoder import DualEncoder
 from transformer import SelfExpert, CrossExpert, TransformerDecoder
 from preprocessing2 import build_dataset, IGNORE_INDEX, IMG_SIZE
 from preprocessing import IMAGENET_MEAN, IMAGENET_STD
+
+# Baseline architectures live in baseline.py (segmentation_models_pytorch); anything
+# else is treated as the proposed InteractSeg model defined in main.py.
+BASELINE_MODELS = ["unet", "unet++", "fpn", "pspnet", "deeplabv3", "deeplabv3+",
+                   "linknet", "manet", "pan", "upernet", "segformer", "dpt"]
 
 
 def build_palette(num_classes, seed=0):
@@ -91,45 +97,72 @@ def main(args):
     test_set = get_test_split(dataset)
 
     state = load_checkpoint(args.ckpt_path)
+    is_baseline = args.model.lower() in BASELINE_MODELS
 
-    # Infer num_classes and embed_dim straight from the trained head so the model
-    # always matches the checkpoint, regardless of the dataset on disk or the
-    # --embed_dim default. classifier.weight is [num_classes, embed_dim].
-    if "decoder.classifier.weight" in state:
-        num_classes = state["decoder.classifier.weight"].shape[0]
-        embed_dim = state["decoder.classifier.weight"].shape[1]
-        if embed_dim != args.embed_dim:
-            print(f"[info] checkpoint embed_dim={embed_dim} overrides "
-                  f"--embed_dim {args.embed_dim}")
+    if is_baseline:
+        # Baseline checkpoints are segmentation_models_pytorch models with a totally
+        # different key layout than ProposedMethod, so we MUST rebuild the matching smp
+        # architecture or none of the weights load. num_classes comes straight from the
+        # trained segmentation head: segmentation_head.0.weight is [num_classes, C, k, k].
+        head = next((v for k, v in state.items()
+                     if k.endswith("segmentation_head.0.weight")), None)
+        num_classes = head.shape[0] if head is not None else dataset.num_classes
+        if num_classes == dataset.num_classes:
+            class_names = dataset.class_names
+        else:
+            print(f"[warn] checkpoint has {num_classes} classes but dataset "
+                  f"'{args.dataset}' has {dataset.num_classes}; using generic names.")
+            class_names = [str(i) for i in range(num_classes)]
+        model = load_baseline_model(args.model, num_classes).to(device)
+        missing, unexpected = model.load_state_dict(state, strict=False)
     else:
-        num_classes = dataset.num_classes
-        embed_dim = args.embed_dim
-    if num_classes == dataset.num_classes:
-        class_names = dataset.class_names
-    else:
-        print(f"[warn] checkpoint has {num_classes} classes but dataset "
-              f"'{args.dataset}' has {dataset.num_classes}; using generic names.")
-        class_names = [str(i) for i in range(num_classes)]
+        # Infer num_classes and embed_dim straight from the trained head so the model
+        # always matches the checkpoint, regardless of the dataset on disk or the
+        # --embed_dim default. classifier.weight is [num_classes, embed_dim].
+        if "decoder.classifier.weight" in state:
+            num_classes = state["decoder.classifier.weight"].shape[0]
+            embed_dim = state["decoder.classifier.weight"].shape[1]
+            if embed_dim != args.embed_dim:
+                print(f"[info] checkpoint embed_dim={embed_dim} overrides "
+                      f"--embed_dim {args.embed_dim}")
+        else:
+            num_classes = dataset.num_classes
+            embed_dim = args.embed_dim
+        if num_classes == dataset.num_classes:
+            class_names = dataset.class_names
+        else:
+            print(f"[warn] checkpoint has {num_classes} classes but dataset "
+                  f"'{args.dataset}' has {dataset.num_classes}; using generic names.")
+            class_names = [str(i) for i in range(num_classes)]
 
-    encoder = DualEncoder(IMG_SIZE, embed_dim, pretrained=args.pretrained)
-    self_expert_pool = nn.ModuleList([
-        SelfExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
-                   embed_dim=embed_dim, num_heads=args.num_heads,
-                   mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
-        for _ in range(2)])
-    cross_expert_pool = nn.ModuleList([
-        CrossExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
-                    embed_dim=embed_dim, num_heads=args.num_heads,
-                    mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
-        for _ in range(2)])
-    auxiliary_tokens = torch.randn(embed_dim, embed_dim)
-    decoder = TransformerDecoder(embed_dim=embed_dim, num_classes=num_classes,
-                                 num_heads=args.num_heads, mlp_ratio=args.mlp_ratio,
-                                 drop=args.drop, attn_drop=args.attn_drop)
+        encoder = DualEncoder(IMG_SIZE, embed_dim, pretrained=args.pretrained)
+        self_expert_pool = nn.ModuleList([
+            SelfExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
+                       embed_dim=embed_dim, num_heads=args.num_heads,
+                       mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
+            for _ in range(2)])
+        cross_expert_pool = nn.ModuleList([
+            CrossExpert(img_size=embed_dim, patch_size=args.patch_size, in_channels=1,
+                        embed_dim=embed_dim, num_heads=args.num_heads,
+                        mlp_ratio=args.mlp_ratio, drop=args.drop, attn_drop=args.attn_drop)
+            for _ in range(2)])
+        auxiliary_tokens = torch.randn(embed_dim, embed_dim)
+        decoder = TransformerDecoder(embed_dim=embed_dim, num_classes=num_classes,
+                                     num_heads=args.num_heads, mlp_ratio=args.mlp_ratio,
+                                     drop=args.drop, attn_drop=args.attn_drop)
 
-    model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool,
-                           auxiliary_tokens, decoder).to(device)
-    missing, unexpected = model.load_state_dict(state, strict=False)
+        model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool,
+                               auxiliary_tokens, decoder).to(device)
+        missing, unexpected = model.load_state_dict(state, strict=False)
+
+    # Fail loud if the checkpoint doesn't actually fit the model: a wholesale mismatch
+    # (e.g. a baseline ckpt loaded into ProposedMethod) means we'd silently visualize an
+    # untrained network, which is exactly the "all models look identical" bug.
+    if len(missing) > 0.5 * len(model.state_dict()):
+        raise SystemExit(
+            f"[error] {len(missing)} missing keys loading '{args.ckpt_path}' into "
+            f"'{args.model}' -- checkpoint and model architecture do not match. "
+            f"Pass the correct --model for this checkpoint.")
     if missing:
         print(f"[warn] missing keys: {len(missing)} (e.g. {missing[:3]})")
     if unexpected:
@@ -170,15 +203,16 @@ def main(args):
             if r == 0:
                 ax.set_title(titles[c], fontsize=13)
 
-    # Legend of the materials that actually appear (skip void).
-    handles = [
-        Patch(facecolor=np.array(palette[cid]) / 255.0,
-              label=f"{cid}: {class_names[cid]}" if cid < len(class_names) else str(cid))
-        for cid in sorted(present) if cid != IGNORE_INDEX
-    ]
-    if handles:
-        fig.legend(handles=handles, loc="lower center", ncol=min(6, len(handles)),
-                   fontsize=9, frameon=False, bbox_to_anchor=(0.5, 0.0))
+    # # Legend of the materials that actually appear (skip void).
+    # handles = [
+    #     Patch(facecolor=np.array(palette[cid]) / 255.0,
+    #           label=f"{cid}: {class_names[cid]}" if cid < len(class_names) else str(cid))
+    #     for cid in sorted(present) if cid != IGNORE_INDEX
+    # ]
+    # if handles:
+    #     fig.legend(handles=handles, loc="lower center", ncol=min(6, len(handles)),
+    #                fontsize=9, frameon=False, bbox_to_anchor=(0.5, 0.0))
+    
     fig.suptitle(f"{args.dataset} test set | ckpt={os.path.basename(args.ckpt_path)}",
                  fontsize=14)
     fig.tight_layout(rect=(0, 0.06, 1, 0.97))
@@ -192,6 +226,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--ckpt_path", type=str)
+    parser.add_argument("--model", type=str, default="proposed",
+                        choices=["proposed"] + BASELINE_MODELS,
+                        help="'proposed' = InteractSeg (main.py); otherwise the matching "
+                             "segmentation_models_pytorch baseline from baseline.py")
     parser.add_argument("--dataset", type=str, default="minc",
                         choices=["minc", "opensurfaces", "both"])
     parser.add_argument("--num_images", type=int, default=6)

@@ -8,7 +8,7 @@ declare -l CHECK_REPRODUCIBILITY
 
 CHECK_REPRODUCIBILITY=$2
 
-if [ "$CHECK_REPRODUCIBILITY" -eq "true" ]; then
+if [ "$CHECK_REPRODUCIBILITY" = "true" ]; then
     LOOP_START=1
     LOOP_END=3
 else
@@ -18,11 +18,11 @@ fi
 
 SEED=44
 
-for TIME in {${LOOP_START}..${LOOP_END}}; do
+for (( TIME=${LOOP_START}; TIME<=LOOP_END; TIME++ )); do
     python3 main.py \
         --seed ${SEED} \
-        --batch 8 \
-        --epochs 30 \
+        --batch 16 \
+        --epochs 20 \
         --warmup_epochs 2 \
         --embed_dim 256 \
         --num_heads 8 \
@@ -34,15 +34,15 @@ for TIME in {${LOOP_START}..${LOOP_END}}; do
         --weight_decay 0.05 \
         --weight_pow 0.5 \
         --max_class_weight 10.0 \
-        --workers 8 \
+        --workers 16 \
         --dataset both \
-        --time_stamp ${TIME} \
-        > log/log_v3_42_both.log \
-        2> log/err_v3_42_both.log
+        --timestamp ${TIME} \
+        > log/log_v3_${SEED}_both_${TIME}.log \
+        2> log/err_v3_${SEED}_both_${TIME}.log
 done
 
 if [ ${LOOP_START} -ne 0 ]; then
-    for TIME in {${LOOP_START}..${LOOP_END}}; do
+    for (( TIME=${LOOP_START}; TIME<=LOOP_END; TIME++ )); do
         python3 image.py \
             --seed ${SEED} \
             --ckpt_path cache/best_both_c68_${TIME}.pt \
@@ -56,5 +56,5 @@ else
             --ckpt_path cache/best_both_c68.pt \
             --dataset both \
             --num_images 3 \
-            --output output/both_${SEED}_${TIME}.png
+            --output output/both_${SEED}.png
 fi

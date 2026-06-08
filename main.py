@@ -256,7 +256,7 @@ def main(args):
     model = ProposedMethod(encoder, self_expert_pool, cross_expert_pool, auxiliary_tokens, decoder).to(device)
 
     if args.weight_pow > 0:
-        if args.timestamp > 0:
+        if int(args.timestamp) > 0:
             cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
         else:
             cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
@@ -291,7 +291,7 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    if args.timestamp > 0:
+    if int(args.timestamp) > 0:
         best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')    
     else:
         best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
