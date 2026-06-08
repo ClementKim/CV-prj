@@ -14,43 +14,71 @@
 
 ### 1. Environment & Requirements
 
-| Item               | Details                                                                                                  |
-|--------------------|----------------------------------------------------------------------------------------------------------|
-| **OS / Kernel**    | Ubuntu 22.04.3 LTS                                                                                       |
-| **GPU**            | NVIDIA A100-SXM4-40GB                                                                                    |
-| **Python**         | 3.10.14 (**Conda**)                                                                                      |
-| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib · segmentation_models_pytorch |
+| Item               | Details                                                                                                           |
+|--------------------|-------------------------------------------------------------------------------------------------------------------|
+| **OS / Kernel**    | Ubuntu 22.04.3 LTS                                                                                                |
+| **GPU**            | NVIDIA A100-SXM4-40GB                                                                                             |
+| **Python**         | 3.10.14 (**Conda**)                                                                                               |
+| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib · segmentation_models_pytorch · pandas |
 
 
 ### 2. How to run
 
-#### 2-1. To download MINC & Opensurface dataset
+#### 2-1. To download MINC & OpenSurfaces datasets
 
 Download from **[Dataset Download](https://drive.google.com/drive/folders/1BJFKH0cRnT5ZZMy1MzJZQfKx1G0y6-C0?usp=sharing)**.
 
-To extract tar files will be performed automatically by **install.sh**.
+The tar files are extracted automatically by **install.sh**.
 
 #### 2-2. To run
 ```sh
 # install.sh will automatically extract tar files, set up the environment, and install necessary libraries.
-source install.sh
+source sh_files/install.sh
 
-# With checking reproducibility
-# In this case, model trains three times.
-source run.sh true
+# With the reproducibility check
+# In this case, the model trains three times.
+source sh_files/run.sh true
 
-# Without checking reproducibility
-# In this case, model trains once.
-source run.sh false
+# Without the reproducibility check
+# In this case, the model trains once.
+source sh_files/run.sh false
 
 # To run baseline experiment --- We trained baseline models from scratch.
-source baseline.sh
+source sh_files/baseline.sh
 ```
+
+#### 2-3. Expected Output
+
+1) Result of `source sh_files/install.sh`
+
+- Extracted MINC and OpenSurfaces datasets
+
+- team15 conda environment with necessary libraries
+
+2) Result of `source sh_files/run.sh true`
+
+- Three checkpoints in ckpt dir named best_both_c68_1.pt, best_both_c68_2.pt, and best_both_c68_3.pt
+
+- Three err log files in log dir named err_v3_44_both_1.log, err_v3_44_both_2.log, and err_v3_44_both_3.log
+
+- Three log files in log dir named log_v3_44_both_1.log, log_v3_44_both_2.log, and log_v3_44_both_3.log
+
+- Three segmented image files in output dir named both_44_1.png, both_44_2.png, and both_44_3.png
+
+3) Result of `source sh_files/run.sh false`
+
+- A checkpoint in ckpt dir named best_both_c68_0.pt
+
+- An err log file in log dir named err_v3_44_both_0.log
+
+- A log file in log dir named log_v3_44_both_0.log
+
+- A segmented image file in output dir named both_44_0.png
 
 
 ### 3. Reproducibility scope
 
-For the reproducibility, we added in **main.py** and **baseline.py** as follows:
+For reproducibility, we added the following to **main.py** and **baseline.py**:
 ```py
 seed = args.seed
 
@@ -71,26 +99,28 @@ torch.use_deterministic_algorithms(True, warn_only = True)
 timm.layers.set_fused_attn(False)
 ```
 
-Datasets that we used for training and testing are extracted by `install.sh`, and preprocessed by `preprocessing.py`.
+Datasets that we used for training and testing are extracted by `install.sh` and preprocessed by `preprocessing.py`.
 
 
 ### 4. AI tools used
-For implementation support, we used Claude Code running inside Visual Studio Code. The AI was used to draft code, refactor existing code, debugging, and explain. Specifically, The AI was applied in the following places.
+For implementation support, we used Claude Code running inside Visual Studio Code. The AI was used to draft code, refactor existing code, debug, and explain. Specifically, the AI was applied in the following places:
 
-1. The AI helped convert the original CIFAR-10 classifier --- our previous topic was `1. Image Classification on a Custom Domain Dataset` ---, into a per-pixel material-segmentation pipeline for the MINC dataset and Opensurface dataset.
+1. The AI helped convert the original CIFAR-10 classifier --- our previous topic was `1. Image Classification on a Custom Domain Dataset` --- into a per-pixel material-segmentation pipeline for the MINC and OpenSurfaces datasets.
 
 2. For the model architecture, the AI was used to draft and refactor the dual-encoder --- a pretrained timm ViT-S and torchvision ResNet34 ---, the mixture-of-experts modules, and the segmentation decoder in encoder.py and transformer.py.
 
-3. On the data side, the AI helped implement collte_fn and the MINC mask handling in preprocessing.py, and it converted process_opensurfaces_release_0.py from Python2 to Python3.
+3. On the data side, the AI helped implement collate_fn and the MINC mask handling in preprocessing.py, and it converted process_opensurfaces_release_0.py from Python 2 to Python 3.
 
-4. We also used the AI for debugging and diagnosis --- resolving Nan loss, a CUDA/NVML driver-version mismatch, and a non-deterministic nll_loss2d warning --- and solving class collapse from severe picel imabalance.
+4. We also used the AI for debugging and diagnosis --- resolving NaN loss, a CUDA/NVML driver-version mismatch, and a non-deterministic nll_loss2d warning --- and solving class collapse from severe pixel imbalance.
 
-5. Finally, the AI helped set up the segmentation_models_pytorch baseline in baseline.py, and write the plotting and visualization utilities plot.py and image.py.
+5. The AI helped set up the segmentation_models_pytorch baseline in baseline.py, and write the plotting and visualization utilities plot.py and image.py.
+
+6. Finally, we used the AI for checking grammar and typos in README.md.
 
 
 ### 5. Baseline sources
 
-We trained and evaluated baseline models via **segmentation_models_pytorch** library.
+We trained and evaluated baseline models via the **segmentation_models_pytorch** library.
 
 | Baseline Model | Paper                                                                                                             |
 |----------------|-------------------------------------------------------------------------------------------------------------------|
