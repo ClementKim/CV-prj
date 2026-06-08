@@ -18,7 +18,10 @@ fi
 
 SEED=44
 
-for (( TIME=${LOOP_START}; TIME<=LOOP_END; TIME++ )); do
+echo ${LOOP_START}
+echo ${LOOP_END}
+
+for (( TIME=${LOOP_START}; TIME<=${LOOP_END}; TIME++ )); do
     python3 main.py \
         --seed ${SEED} \
         --batch 16 \
@@ -42,7 +45,7 @@ for (( TIME=${LOOP_START}; TIME<=LOOP_END; TIME++ )); do
 done
 
 if [ ${LOOP_START} -ne 0 ]; then
-    for (( TIME=${LOOP_START}; TIME<=LOOP_END; TIME++ )); do
+    for (( TIME=${LOOP_START}; TIME<=${LOOP_END}; TIME++ )); do
         python3 image.py \
             --seed ${SEED} \
             --ckpt_path cache/best_both_c68_${TIME}.pt \
