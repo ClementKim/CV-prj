@@ -6,7 +6,7 @@ mkdir -p log
 
 declare -l CHECK_REPRODUCIBILITY
 
-CHECK_REPRODUCIBILITY=$2
+CHECK_REPRODUCIBILITY=$1
 
 if [ "$CHECK_REPRODUCIBILITY" = "true" ]; then
     LOOP_START=1
@@ -17,9 +17,6 @@ else
 fi
 
 SEED=44
-
-echo ${LOOP_START}
-echo ${LOOP_END}
 
 for (( TIME=${LOOP_START}; TIME<=${LOOP_END}; TIME++ )); do
     python3 main.py \
