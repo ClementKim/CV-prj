@@ -106,7 +106,7 @@ For implementation support, we used Claude Code running inside Visual Studio Cod
 
 2. For the model architecture, the AI was used to draft and refactor the dual-encoder --- a pretrained timm ViT-S and torchvision ResNet34 ---, the mixture-of-experts modules, and the segmentation decoder in encoder.py and transformer.py.
 
-3. For data handling tasks, we used AI in preprocessing.py, to implement seg_collate_fn and process MINC masks. We also automated the conversion of opensurfaces-data/process_opensurfaces_release_0.py from Python 2 to Python 3.
+3. For data handling tasks, we used AI in preprocessing.py, to implement seg_collate_fn and process MINC and OpenSurfaces datasets. We also automated the conversion of opensurfaces-data/process_opensurfaces_release_0.py from Python 2 to Python 3.
 
 4. We also used the AI for debugging and diagnosis --- resolving NaN loss, a CUDA/NVML driver-version mismatch, and a non-deterministic nll_loss2d warning --- and solving class collapse from severe pixel imbalance.
 
