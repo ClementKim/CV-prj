@@ -36,15 +36,12 @@ The tar files are extracted automatically by **install.sh**.
 source sh_files/install.sh
 
 # With the reproducibility check
-# In this case, the model trains three times.
+# In this case, the model trains and evaluates three times.
 source sh_files/run.sh true
 
 # Without the reproducibility check
-# In this case, the model trains once.
+# In this case, the model trains and evaluates once.
 source sh_files/run.sh false
-
-# To run baseline experiment --- We trained baseline models from scratch.
-source sh_files/baseline.sh
 ```
 
 #### 2-3. Expected Output
