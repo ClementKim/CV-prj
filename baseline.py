@@ -11,7 +11,7 @@ import segmentation_models_pytorch as smp
 from tqdm import tqdm
 from main import AugmentSeg, compute_class_weights, train_step, evaluate, loss_fn
 from torch.utils.data import DataLoader, random_split
-from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
+from preprocessing import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
 
 def load_model(model_name, num_classes):
     if model_name.lower() == "unet":
@@ -152,8 +152,8 @@ def main(args):
     model = load_model(args.model, num_classes).cuda()
 
     if args.weight_pow > 0:
-        cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
-        class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
+        ckpt_path = os.path.join('ckpt', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, ckpt_path)
         print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
     else:
         class_weights = None
@@ -163,6 +163,7 @@ def main(args):
         if not p.requires_grad:
             continue
         (backbone_params if name.startswith(('encoder.vit.vit.', 'encoder.res.')) else head_params).append(p)
+
     optimizer = torch.optim.AdamW(
         [{'params': backbone_params, 'lr': lr * args.backbone_lr_mult},
          {'params': head_params, 'lr': lr}],
@@ -181,20 +182,20 @@ def main(args):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max = max(1, total_steps))
 
     best_miou = -1.0
-    best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.model}.pt')
-    for epoch in range(args.epochs):
+    best_path = os.path.join('ckpt', f'best_{args.dataset}_c{num_classes}_{args.model}.pt')
+    for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
             loss = train_step(model, batch_data, class_weights, optimizer, scaler, device)
             scheduler.step()
             if loss is not None:
                 running_loss += loss; num_batches += 1
-        print(f'Epoch: {epoch+1}, Average Loss: {running_loss / max(1, num_batches):.4f}, LR: {scheduler.get_last_lr()[0]:.2e}')
+        print(f'Epoch: {epoch}, Average Loss: {running_loss / max(1, num_batches):.4f}, LR: {scheduler.get_last_lr()[0]:.2e}')
 
         _, miou = evaluate(model, val_loader, num_classes, device)
         if miou > best_miou:
             best_miou = miou
-            os.makedirs('cache', exist_ok = True)
+            os.makedirs('ckpt', exist_ok = True)
             torch.save(model.state_dict(), best_path)
             print(f'  -> new best val mIoU {best_miou:.4f} (checkpoint saved)')
 

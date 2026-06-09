@@ -2,7 +2,7 @@
 
 conda activate team15
 
-mkdir -p log
+mkdir -p log ckpt output
 
 declare -l CHECK_REPRODUCIBILITY
 
@@ -45,7 +45,7 @@ if [ ${LOOP_START} -ne 0 ]; then
     for (( TIME=${LOOP_START}; TIME<=${LOOP_END}; TIME++ )); do
         python3 image.py \
             --seed ${SEED} \
-            --ckpt_path cache/best_both_c68_${TIME}.pt \
+            --ckpt_path ckpt/best_both_c68_${TIME}.pt \
             --dataset both \
             --num_images 3 \
             --output output/both_${SEED}_${TIME}.png
@@ -53,7 +53,7 @@ if [ ${LOOP_START} -ne 0 ]; then
 else
     python3 image.py \
             --seed ${SEED} \
-            --ckpt_path cache/best_both_c68.pt \
+            --ckpt_path ckpt/best_both_c68.pt \
             --dataset both \
             --num_images 3 \
             --output output/both_${SEED}.png

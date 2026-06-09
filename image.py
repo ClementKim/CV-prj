@@ -18,8 +18,7 @@ from main import ProposedMethod
 from baseline import load_model as load_baseline_model
 from encoder import DualEncoder
 from transformer import SelfExpert, CrossExpert, TransformerDecoder
-from preprocessing2 import build_dataset, IGNORE_INDEX, IMG_SIZE
-from preprocessing import IMAGENET_MEAN, IMAGENET_STD
+from preprocessing import build_dataset, IGNORE_INDEX, IMG_SIZE, IMAGENET_MEAN, IMAGENET_STD
 
 # Baseline architectures live in baseline.py (segmentation_models_pytorch); anything
 # else is treated as the proposed InteractSeg model defined in main.py.
@@ -203,15 +202,15 @@ def main(args):
             if r == 0:
                 ax.set_title(titles[c], fontsize=13)
 
-    # # Legend of the materials that actually appear (skip void).
-    # handles = [
-    #     Patch(facecolor=np.array(palette[cid]) / 255.0,
-    #           label=f"{cid}: {class_names[cid]}" if cid < len(class_names) else str(cid))
-    #     for cid in sorted(present) if cid != IGNORE_INDEX
-    # ]
-    # if handles:
-    #     fig.legend(handles=handles, loc="lower center", ncol=min(6, len(handles)),
-    #                fontsize=9, frameon=False, bbox_to_anchor=(0.5, 0.0))
+    # Legend of the materials that actually appear (skip void).
+    handles = [
+        Patch(facecolor=np.array(palette[cid]) / 255.0,
+              label=f"{cid}: {class_names[cid]}" if cid < len(class_names) else str(cid))
+        for cid in sorted(present) if cid != IGNORE_INDEX
+    ]
+    if handles:
+        fig.legend(handles=handles, loc="lower center", ncol=min(6, len(handles)),
+                   fontsize=9, frameon=False, bbox_to_anchor=(0.5, 0.0))
     
     fig.suptitle(f"{args.dataset} test set | ckpt={os.path.basename(args.ckpt_path)}",
                  fontsize=14)

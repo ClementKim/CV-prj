@@ -9,7 +9,7 @@ if [ $ENV_EXISTS -ne 0 ]; then
 
     conda activate team15
     
-    pip install "torch==2.10.0" "torchvision==0.25.0" timm numpy pillow matplotlib tqdm segmentation_models_pytorch
+    pip install "torch==2.10.0" "torchvision==0.25.0" timm numpy pillow matplotlib tqdm segmentation_models_pytorch pandas
 
     echo "Environment setup complete"
 fi

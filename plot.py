@@ -1,5 +1,5 @@
-import argparse
 import sys
+import argparse
  
 import pandas as pd
 import matplotlib.pyplot as plt

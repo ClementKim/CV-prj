@@ -1,8 +1,8 @@
 import os
+import timm
 import torch
 import random
 import argparse
-import timm
 
 import numpy as np
 import torch.nn as nn
@@ -16,7 +16,7 @@ import torchvision.transforms.functional as TF
 
 from encoder import DualEncoder
 from transformer import SelfExpert, CrossExpert, TransformerDecoder
-from preprocessing2 import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
+from preprocessing import build_dataset, seg_collate_fn, IGNORE_INDEX, IMG_SIZE
 
 class AugmentSeg(torch.utils.data.Dataset):
     """Train-only augmentation: joint random-resized-crop + h-flip on (image, mask).
@@ -31,17 +31,17 @@ class AugmentSeg(torch.utils.data.Dataset):
         return len(self.base)
 
     def __getitem__(self, i):
-        img, lbl = self.base[i]                                  # img [3,H,W] normalized, lbl [H,W]
+        img, label = self.base[i]                                  # img [3,H,W] normalized, label [H,W]
         y, x, h, w = T.RandomResizedCrop.get_params(img, scale = self.scale, ratio = (0.75, 1.3333))
         img = TF.resized_crop(img, y, x, h, w, [self.size, self.size],
                               interpolation = TF.InterpolationMode.BILINEAR, antialias = True)
-        lbl = TF.resized_crop(lbl.unsqueeze(0).float(), y, x, h, w, [self.size, self.size],
+        label = TF.resized_crop(label.unsqueeze(0).float(), y, x, h, w, [self.size, self.size],
                               interpolation = TF.InterpolationMode.NEAREST, antialias = False)
-        lbl = lbl.squeeze(0).long()                              # nearest keeps 255 (void) intact
+        label = label.squeeze(0).long()                              # nearest keeps 255 (void) intact
         if random.random() < 0.5:
             img = torch.flip(img, dims = [2])
-            lbl = torch.flip(lbl, dims = [1])
-        return img, lbl
+            label = torch.flip(label, dims = [1])
+        return img, label
 
 class DenseMoE(nn.Module):
     def __init__(self, self_expert_pool, cross_expert_pool, aux):
@@ -129,7 +129,7 @@ def evaluate(model, loader, num_classes, device):
     print(f'Pixel Accuracy: {pixel_acc:.4f}, mIoU: {miou:.4f}')
     return pixel_acc, miou
 
-def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight, device, cache_path = None):
+def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight, device, ckpt_path = None):
     """Inverse-frequency class weights over the TRAIN split only (no val/test leakage).
 
     The MINC-S labels are ~54x imbalanced at the pixel level, so plain CE collapses to
@@ -138,8 +138,8 @@ def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight,
     Weights are normalized so present classes average to 1 (keeps the loss scale close to
     plain CE) and clamped to `max_weight` so ultra-rare classes can't dominate the gradient.
     """
-    if cache_path and os.path.exists(cache_path):
-        return torch.load(cache_path).to(device)
+    if ckpt_path and os.path.exists(ckpt_path):
+        return torch.load(ckpt_path).to(device)
 
     counts = torch.zeros(num_classes, dtype = torch.double)
     for i in tqdm(indices, desc = 'Class weights'):
@@ -148,7 +148,7 @@ def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight,
         counts += torch.bincount(label[valid].view(-1), minlength = num_classes).double()
 
     present = counts > 0
-    freq = counts / counts.sum().clamp(min = 1)
+    freq = counts / counts.sum().clamp(min = 1) # clamp: it limits a value to a range -> To avoid divide-by-zero
     weights = torch.ones(num_classes, dtype = torch.double)
     weights[present] = (1.0 / freq[present]) ** weight_pow
     weights[present] *= present.sum() / weights[present].sum()       # present-class mean -> 1
@@ -156,16 +156,17 @@ def compute_class_weights(dataset, indices, num_classes, weight_pow, max_weight,
     weights[~present] = 0.0                                          # classes absent from train get no weight
 
     weights = weights.float()
-    if cache_path:
-        os.makedirs(os.path.dirname(cache_path), exist_ok = True)
-        torch.save(weights, cache_path)
+    if ckpt_path:
+        os.makedirs(os.path.dirname(ckpt_path), exist_ok = True)
+        torch.save(weights, ckpt_path)
     return weights.to(device)
 
 def loss_fn(class_weights, logits, labels):
     per_pixel = nn.functional.cross_entropy(
         logits, labels, weight = class_weights,
         ignore_index = IGNORE_INDEX, reduction = 'none')      # [B, H, W], 0 at ignored pixels
-    valid = labels != IGNORE_INDEX                            # True at real (non-void) pixels
+    valid = labels != IGNORE_INDEX                            # exclude void pixels
+    # denominator
     denom = valid.sum() if class_weights is None else class_weights[labels[valid]].sum()
     return per_pixel.sum() / denom.clamp(min = 1)
 
@@ -175,7 +176,7 @@ def seed_workers(worker_id):
     random.seed(worker_seed)
 
 def main(args):
-    img_size = IMG_SIZE        # 512; ViT positional embedding is interpolated to this size
+    img_size = IMG_SIZE          # 512; ViT positional embedding is interpolated to this size
     patch_size = args.patch_size
     embed_dim = args.embed_dim
     num_heads = args.num_heads
@@ -183,7 +184,7 @@ def main(args):
     drop = args.drop
     attn_drop = args.attn_drop
 
-    batch = args.batch                  # 512x512 with 4 ViT experts is heavy; raise if memory allows
+    batch = args.batch
     lr = args.lr
     weight_decay = args.weight_decay
 
@@ -257,21 +258,22 @@ def main(args):
 
     if args.weight_pow > 0:
         if int(args.timestamp) > 0:
-            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
+            ckpt_path = os.path.join('ckpt', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}_{args.timestamp}.pt')
         else:
-            cache_path = os.path.join('cache', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
-        class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, cache_path)
+            ckpt_path = os.path.join('ckpt', f'clsw_{args.dataset}_n{n}_c{num_classes}_p{args.weight_pow}_m{args.max_class_weight}.pt')
+        class_weights = compute_class_weights(dataset, train_set.indices, num_classes, args.weight_pow, args.max_class_weight, device, ckpt_path)
         print('Class weights (present):', class_weights[class_weights > 0].cpu().numpy().round(2))
     else:
         class_weights = None
 
-    # Lower LR on the pretrained backbones, full LR on the from-scratch head / experts / decoder,
-    # so fine-tuning the ImageNet features doesn't wreck them.
+    # To split parmas into two groups -> the pretrained backbone trains at a lower LR
     backbone_params, head_params = [], []
     for name, p in model.named_parameters():
+        # To skip frozen params
         if not p.requires_grad:
             continue
         (backbone_params if name.startswith(('encoder.vit.vit.', 'encoder.res.')) else head_params).append(p)
+
     optimizer = torch.optim.AdamW(
         [{'params': backbone_params, 'lr': lr * args.backbone_lr_mult},
          {'params': head_params, 'lr': lr}],
@@ -292,9 +294,9 @@ def main(args):
 
     best_miou = -1.0
     if int(args.timestamp) > 0:
-        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')    
+        best_path = os.path.join('ckpt', f'best_{args.dataset}_c{num_classes}_{args.timestamp}.pt')    
     else:
-        best_path = os.path.join('cache', f'best_{args.dataset}_c{num_classes}.pt')
+        best_path = os.path.join('ckpt', f'best_{args.dataset}_c{num_classes}.pt')
     for epoch in range(1, args.epochs + 1):
         running_loss, num_batches = 0.0, 0
         for batch_data in tqdm(train_loader, desc=f'Epoch {epoch}'):
@@ -307,7 +309,7 @@ def main(args):
         _, miou = evaluate(model, val_loader, num_classes, device)
         if miou > best_miou:
             best_miou = miou
-            os.makedirs('cache', exist_ok = True)
+            os.makedirs('ckpt', exist_ok = True)
             torch.save(model.state_dict(), best_path)
             print(f'  -> new best val mIoU {best_miou:.4f} (checkpoint saved)')
 

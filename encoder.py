@@ -1,17 +1,3 @@
-"""Pretrained dual encoder for the proposed material-segmentation model.
-
-The original encoders were trained from scratch, which on ~1.4k MINC images simply
-memorized the train set (train loss collapsed while val mIoU stayed flat). Here both
-branches are ImageNet-pretrained so the model starts from real visual features:
-
-    ViT branch    : timm ViT-S/16, gives a global CLS summary + a 32x32 patch grid.
-    ResNet branch : torchvision ResNet-34, gives a global vector AND dense multi-scale
-                    feature maps (stride 4/8/16) that the decoder upsamples through.
-
-``DualEncoder`` projects every backbone output to a single working ``embed_dim`` so the
-bilinear / MoE / decoder dims are decoupled from the (fixed) backbone widths.
-"""
-
 import timm
 import torch
 import torch.nn as nn

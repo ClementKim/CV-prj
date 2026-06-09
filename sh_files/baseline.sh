@@ -23,9 +23,9 @@ do
 
         python3 image.py \
             --seed ${SEED} \
-            --ckpt_path cache/best_both_c68_${MODEL}.pt \
+            --ckpt_path ckpt/best_both_c68_${MODEL}.pt \
             --dataset both \
             --num_images 3 \
-            --output output/both_${SEED}_${TIME}.png
+            --output output/both_${SEED}.png
     done
 done
