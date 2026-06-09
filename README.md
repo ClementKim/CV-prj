@@ -51,29 +51,29 @@ source sh_files/baseline.sh
 
 1) Result of `source sh_files/install.sh`
 
-- Extracted MINC and OpenSurfaces datasets
+   - Extracted MINC and OpenSurfaces datasets
 
-- team15 conda environment with necessary libraries
+   - team15 conda environment with necessary libraries
 
 2) Result of `source sh_files/run.sh true`
 
-- Three checkpoints in ckpt dir named best_both_c68_1.pt, best_both_c68_2.pt, and best_both_c68_3.pt
+   - Three checkpoints in ckpt dir named best_both_c68_1.pt, best_both_c68_2.pt, and best_both_c68_3.pt
 
-- Three err log files in log dir named err_v3_44_both_1.log, err_v3_44_both_2.log, and err_v3_44_both_3.log
+   - Three err log files in log dir named err_v3_44_both_1.log, err_v3_44_both_2.log, and err_v3_44_both_3.log
 
-- Three log files in log dir named log_v3_44_both_1.log, log_v3_44_both_2.log, and log_v3_44_both_3.log
+   - Three log files in log dir named log_v3_44_both_1.log, log_v3_44_both_2.log, and log_v3_44_both_3.log
 
-- Three segmented image files in output dir named both_44_1.png, both_44_2.png, and both_44_3.png
+   - Three segmented image files in output dir named both_44_1.png, both_44_2.png, and both_44_3.png
 
 3) Result of `source sh_files/run.sh false`
 
-- A checkpoint in ckpt dir named best_both_c68_0.pt
+   - A checkpoint in ckpt dir named best_both_c68_0.pt
 
-- An err log file in log dir named err_v3_44_both_0.log
+   - An err log file in log dir named err_v3_44_both_0.log
 
-- A log file in log dir named log_v3_44_both_0.log
+   - A log file in log dir named log_v3_44_both_0.log
 
-- A segmented image file in output dir named both_44_0.png
+   - A segmented image file in output dir named both_44_0.png
 
 
 ### 3. Reproducibility scope
