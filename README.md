@@ -1,4 +1,4 @@
-# Computer Vision Final Project
+# InteractSeg: Bilinear Interaction Learning for Material Segmentation
 
 **This project was completed as the Final Project for `Computer Vision 2026` at GIST, supervised by Professor Kwanyoung Kim.**
 
