@@ -117,7 +117,7 @@ For implementation support, we used Claude Code running inside Visual Studio Cod
 
 ### 5. Baseline sources
 
-We trained and evaluated baseline models via the **segmentation_models_pytorch [GitHub](https://github.com/qubvel-org/segmentation_models.pytorch)** library.
+We trained and evaluated baseline models via the **segmentation_models_pytorch ([GitHub](https://github.com/qubvel-org/segmentation_models.pytorch))** library.
 
 | Baseline Model | Paper                                                                                                             |
 |----------------|-------------------------------------------------------------------------------------------------------------------|
