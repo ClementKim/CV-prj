@@ -32,15 +32,15 @@ The tar files are extracted automatically by **install.sh**.
 
 #### 2-2. To run
 ```sh
-# install.sh will automatically extract tar files, set up the environment, and install necessary libraries.
+# install.sh will automatically extract tar files, set up the environment, and install the necessary libraries.
 source sh_files/install.sh
 
 # With the reproducibility check
-# In this case, the model trains and evaluates three times.
+# In this case, the model is trained and evaluated three times.
 source sh_files/run.sh true
 
 # Without the reproducibility check
-# In this case, the model trains and evaluates once.
+# In this case, the model is trained and evaluated once.
 source sh_files/run.sh false
 ```
 
