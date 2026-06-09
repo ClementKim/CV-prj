@@ -14,12 +14,12 @@
 
 ### 1. Environment & Requirements
 
-| Item               | Details                                                                                                           |
-|--------------------|-------------------------------------------------------------------------------------------------------------------|
-| **OS / Kernel**    | Ubuntu 22.04.3 LTS                                                                                                |
-| **GPU**            | NVIDIA A100-SXM4-40GB                                                                                             |
-| **Python**         | 3.10.14 (**Conda**)                                                                                               |
-| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib · segmentation_models_pytorch · pandas |
+| Item               | Details                                                                                                  |
+|--------------------|----------------------------------------------------------------------------------------------------------|
+| **OS / Kernel**    | Ubuntu 22.04.3 LTS                                                                                       |
+| **GPU**            | NVIDIA A100-SXM4-40GB                                                                                    |
+| **Python**         | 3.10.14 (**Conda**)                                                                                      |
+| **Core Libraries** | torch (2.10.0) · torchvision (0.25.0) · numpy · timm · pillow · matplotlib · segmentation_models_pytorch |
 
 
 ### 2. How to run
