@@ -100,17 +100,17 @@ Datasets that we used for training and testing are extracted by `install.sh` and
 
 
 ### 4. AI tools used
-For implementation support, we used Claude Code running inside Visual Studio Code. The AI was used to draft code, refactor existing code, debug, and explain. Specifically, the AI was applied in the following places:
+For implementation support, we used Claude Code running inside Visual Studio Code. The AI was used to draft code, refactor existing code, and debug. Specifically, the AI was applied in the following places:
 
-1. The AI helped convert the original CIFAR-10 classifier --- our previous topic was `1. Image Classification on a Custom Domain Dataset` --- into a per-pixel material-segmentation pipeline for the MINC and OpenSurfaces datasets.
+1. We used AI assistance to convert the original CIFAR-10 classifier --- our previous topic was `1. Image Classification on a Custom Domain Dataset` --- into a per-pixel material-segmentation pipeline for the MINC and OpenSurfaces datasets.
 
 2. For the model architecture, the AI was used to draft and refactor the dual-encoder --- a pretrained timm ViT-S and torchvision ResNet34 ---, the mixture-of-experts modules, and the segmentation decoder in encoder.py and transformer.py.
 
-3. On the data side, the AI helped implement collate_fn and the MINC mask handling in preprocessing.py, and it converted process_opensurfaces_release_0.py from Python 2 to Python 3.
+3. For data handling tasks, we used AI in preprocessing.py, to implement seg_collate_fn and process MINC masks. We also automated the conversion of opensurfaces-data/process_opensurfaces_release_0.py from Python 2 to Python 3.
 
 4. We also used the AI for debugging and diagnosis --- resolving NaN loss, a CUDA/NVML driver-version mismatch, and a non-deterministic nll_loss2d warning --- and solving class collapse from severe pixel imbalance.
 
-5. The AI helped set up the segmentation_models_pytorch baseline in baseline.py, and write the plotting and visualization utilities plot.py and image.py.
+5. The AI was utilized to set up the segmentation_models_pytorch baseline in baseline.py. It also helped implement plotting and visualization utilities in plot.py and image.py.
 
 6. Finally, we used the AI for checking grammar and typos in README.md.
 
